@@ -30,7 +30,11 @@ mod imp {
     pub struct FernsichtRdpWindow {
         // Template widgets
         #[template_child]
-        pub label: TemplateChild<gtk::Label>,
+        pub hostnameentry: TemplateChild<adw::EntryRow>,
+        #[template_child]
+        pub usernameentry: TemplateChild<adw::EntryRow>,
+        #[template_child]
+        pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
     }
 
     #[glib::object_subclass]

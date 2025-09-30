@@ -1,49 +1,75 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Created with Cambalache 0.96.1 -->
 <interface>
-  <requires lib="gtk" version="4.0"/>
+  <!-- interface-name window.ui -->
   <requires lib="Adw" version="1.0"/>
+  <requires lib="gio" version="2.0"/>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="libadwaita" version="1.7"/>
   <template class="FernsichtRdpWindow" parent="AdwApplicationWindow">
-    <property name="title" translatable="yes">Fernsicht RDP</property>
-    <property name="default-width">800</property>
-    <property name="default-height">600</property>
     <property name="content">
       <object class="AdwToolbarView">
         <child type="top">
           <object class="AdwHeaderBar">
             <child type="end">
               <object class="GtkMenuButton">
-                <property name="primary">True</property>
                 <property name="icon-name">open-menu-symbolic</property>
-                <property name="tooltip-text" translatable="yes">Main Menu</property>
                 <property name="menu-model">primary_menu</property>
+                <property name="primary">True</property>
+                <property name="tooltip-text" translatable="yes">Main Menu</property>
               </object>
             </child>
           </object>
         </child>
-        <property name="content">
-          <object class="GtkLabel" id="label">
-            <property name="label" translatable="yes">Hello, World!</property>
-            <style>
-              <class name="title-1"/>
-            </style>
+        <child>
+          <object class="AdwClamp">
+            <property name="maximum-size">300</property>
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title">Connect to RDP server:</property>
+                <child>
+                  <object class="AdwEntryRow" id="hostnameentry">
+                    <property name="title">Hostname</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="AdwEntryRow" id="usernameentry">
+                    <property name="title">Username</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="AdwPasswordEntryRow" id="passwordentry">
+                    <property name="title">Password</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="AdwButtonRow" id="connect">
+                    <property name="title">Connect</property>
+                  </object>
+                </child>
+              </object>
+            </child>
           </object>
-        </property>
+        </child>
       </object>
     </property>
+    <property name="default-height">600</property>
+    <property name="default-width">800</property>
+    <property name="title" translatable="yes">Fernsicht RDP</property>
   </template>
   <menu id="primary_menu">
     <section>
       <item>
-        <attribute name="label" translatable="yes">_Preferences</attribute>
         <attribute name="action">app.preferences</attribute>
+        <attribute name="label" translatable="yes">_Preferences</attribute>
       </item>
       <item>
-        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
         <attribute name="action">app.shortcuts</attribute>
+        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
       </item>
       <item>
-        <attribute name="label" translatable="yes">_About FernsichtRdp</attribute>
         <attribute name="action">app.about</attribute>
+        <attribute name="label" translatable="yes">_About FernsichtRdp</attribute>
       </item>
     </section>
   </menu>

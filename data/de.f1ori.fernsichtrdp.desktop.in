@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=fernsicht-rdp
+Exec=fernsicht-rdp
+Icon=de.f1ori.fernsichtrdp
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=GTK;
+StartupNotify=true
+DBusActivatable=true

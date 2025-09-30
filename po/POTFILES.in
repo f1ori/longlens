@@ -1,0 +1,6 @@
+# List of source files containing translatable strings.
+# Please keep this file sorted alphabetically.
+data/de.f1ori.fernsichtrdp.desktop.in
+data/de.f1ori.fernsichtrdp.metainfo.xml.in
+data/de.f1ori.fernsichtrdp.gschema.xml
+src/window.ui

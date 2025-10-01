@@ -22,31 +22,65 @@
           </object>
         </child>
         <child>
-          <object class="AdwClamp">
-            <property name="maximum-size">300</property>
+          <object class="GtkStack" id="stack">
+            <property name="transition-type">slide-left-right</property>
             <child>
-              <object class="AdwPreferencesGroup">
-                <property name="title">Connect to RDP server:</property>
-                <child>
-                  <object class="AdwEntryRow" id="hostnameentry">
-                    <property name="title">Hostname</property>
+              <object class="GtkStackPage" id="connectionspage">
+                <property name="child">
+                  <object class="AdwClamp">
+                    <property name="maximum-size">300</property>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title">Connect to RDP host:</property>
+                        <child>
+                          <object class="AdwEntryRow" id="hostnameentry">
+                            <property name="title">Hostname</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwEntryRow" id="usernameentry">
+                            <property name="title">Username</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwPasswordEntryRow" id="passwordentry">
+                            <property name="title">Password</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwButtonRow" id="connectbutton">
+                            <property name="title">Connect</property>
+                            <signal name="activated" handler="handle_connectbutton_activated" swapped="yes"/>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
                   </object>
-                </child>
-                <child>
-                  <object class="AdwEntryRow" id="usernameentry">
-                    <property name="title">Username</property>
+                </property>
+                <property name="name">connections</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStackPage" id="connectingpage">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="baseline-position">bottom</property>
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">10</property>
+                    <property name="valign">center</property>
+                    <child>
+                      <object class="AdwSpinner">
+                        <property name="height-request">30</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="connectinglabel">
+                        <property name="label">Connecting...</property>
+                      </object>
+                    </child>
                   </object>
-                </child>
-                <child>
-                  <object class="AdwPasswordEntryRow" id="passwordentry">
-                    <property name="title">Password</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="AdwButtonRow" id="connect">
-                    <property name="title">Connect</property>
-                  </object>
-                </child>
+                </property>
+                <property name="name">connecting</property>
               </object>
             </child>
           </object>

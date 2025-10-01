@@ -18,8 +18,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::prelude::*;
 use adw::subclass::prelude::*;
+use gtk::prelude::*;
 use gtk::{gio, glib};
 
 mod imp {
@@ -30,11 +30,21 @@ mod imp {
     pub struct FernsichtRdpWindow {
         // Template widgets
         #[template_child]
+        pub stack: TemplateChild<gtk::Stack>,
+        #[template_child]
         pub hostnameentry: TemplateChild<adw::EntryRow>,
         #[template_child]
         pub usernameentry: TemplateChild<adw::EntryRow>,
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
+    }
+
+    #[gtk::template_callbacks]
+    impl FernsichtRdpWindow {
+        #[template_callback]
+        fn handle_connectbutton_activated(&self, _button: &adw::ButtonRow) {
+            self.stack.set_visible_child_name("connecting");
+        }
     }
 
     #[glib::object_subclass]
@@ -45,6 +55,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
+            klass.bind_template_callbacks();
         }
 
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {

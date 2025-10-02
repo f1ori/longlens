@@ -22,6 +22,9 @@ use adw::subclass::prelude::*;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
+use crate::ironrdpwidget::IronRdpWidget;
+
+
 mod imp {
     use super::*;
 
@@ -37,6 +40,8 @@ mod imp {
         pub usernameentry: TemplateChild<adw::EntryRow>,
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
+        #[template_child]
+        pub rdpwidget: TemplateChild<IronRdpWidget>,
     }
 
     #[gtk::template_callbacks]

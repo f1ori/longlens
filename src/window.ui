@@ -83,6 +83,15 @@
                 <property name="name">connecting</property>
               </object>
             </child>
+            <child>
+              <object class="GtkStackPage" id="rdppage">
+                <property name="name">rdppage</property>
+                <property name="child">
+                  <object class="IronRdpWidget" id="rdpwidget">
+                  </object>
+                </property>
+              </object>
+            </child>
           </object>
         </child>
       </object>

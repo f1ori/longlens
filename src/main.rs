@@ -21,6 +21,7 @@
 mod application;
 mod config;
 mod window;
+mod ironrdpwidget;
 
 use self::application::FernsichtRdpApplication;
 use self::window::FernsichtRdpWindow;

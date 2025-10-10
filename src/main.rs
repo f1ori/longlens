@@ -22,6 +22,7 @@ mod application;
 mod config;
 mod window;
 mod ironrdpwidget;
+mod rdpclient;
 
 use self::application::FernsichtRdpApplication;
 use self::window::FernsichtRdpWindow;

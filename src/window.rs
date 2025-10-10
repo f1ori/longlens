@@ -24,7 +24,6 @@ use gtk::{gio, glib};
 
 use crate::ironrdpwidget::IronRdpWidget;
 
-
 mod imp {
     use super::*;
 
@@ -49,6 +48,7 @@ mod imp {
         #[template_callback]
         fn handle_connectbutton_activated(&self, _button: &adw::ButtonRow) {
             self.stack.set_visible_child_name("connecting");
+            self.rdpwidget.connect_to_server(String::from("localhost"), String::from(""), String::from("horus"));
         }
     }
 

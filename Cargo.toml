@@ -1,13 +1,29 @@
 [package]
 name = "fernsicht-rdp"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
+adw = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
+ironrdp = { version = "0.13", features = [
+    "session",
+    "input",
+    "graphics",
+    "dvc",
+    "svc",
+    "rdpdr",
+    "rdpsnd",
+    "cliprdr",
+    "displaycontrol",
+    "connector",
+] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
-[dependencies.adw]
-package = "libadwaita"
-version = "0.7"
-features = ["v1_6"]
+anyhow = "1"
+semver = "1"
+tap = "1"
+whoami = "1.6"
+async-channel = "2.5.0"
+

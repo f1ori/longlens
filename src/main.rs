@@ -20,19 +20,25 @@
 
 mod application;
 mod config;
-mod window;
 mod ironrdpwidget;
 mod rdpclient;
+mod window;
 
 use self::application::FernsichtRdpApplication;
 use self::window::FernsichtRdpWindow;
 
 use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
-use gtk::{gio, glib};
 use gtk::prelude::*;
+use gtk::{gio, glib};
+use tracing_subscriber;
 
 fn main() -> glib::ExitCode {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_target(false)
+        .init();
+
     // Set up gettext translations
     bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR).expect("Unable to bind the text domain");
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
@@ -47,7 +53,8 @@ fn main() -> glib::ExitCode {
     // Create a new GtkApplication. The application manages our main loop,
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
-    let app = FernsichtRdpApplication::new("de.f1ori.fernsichtrdp", &gio::ApplicationFlags::empty());
+    let app =
+        FernsichtRdpApplication::new("de.f1ori.fernsichtrdp", &gio::ApplicationFlags::empty());
 
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This

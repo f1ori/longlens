@@ -48,7 +48,7 @@ mod imp {
         #[template_callback]
         fn handle_connectbutton_activated(&self, _button: &adw::ButtonRow) {
             self.stack.set_visible_child_name("connecting");
-            self.rdpwidget.connect_to_server(String::from("localhost"), String::from(""), String::from("horus"));
+            self.rdpwidget.connect_to_server(String::from("localhost"), String::from("flo"), String::from("flo"));
         }
     }
 

@@ -1,6 +1,16 @@
-use ironrdp::connector::{self, Credentials};
+use core::num::NonZeroU16;
+use ironrdp::connector::{Credentials, ConnectionResult, ConnectorResult};
 use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
+use ironrdp::graphics::image_processing::PixelFormat;
+use ironrdp::session::image::DecodedImage;
+use ironrdp::session::{ActiveStage, ActiveStageOutput, GracefulDisconnectReason, SessionResult};
+use ironrdp::{connector, session};
+use ironrdp_tokio::reqwest::ReqwestNetworkClient;
+use ironrdp_tokio::{split_tokio_framed, FramedWrite};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::TcpStream;
+use tracing::{debug, trace};
 
 #[derive(Debug)]
 pub enum RdpInputEvent {
@@ -27,6 +37,11 @@ pub enum RdpInputEvent {
 pub enum RdpOutputEvent {
     Connected,
     ConnectionFailure(String),
+    Image {
+        buffer: Vec<u32>,
+        width: NonZeroU16,
+        height: NonZeroU16,
+    },
     // PointerDefault,
     // PointerHidden,
     // PointerPosition {
@@ -37,10 +52,189 @@ pub enum RdpOutputEvent {
     // Terminated(SessionResult<GracefulDisconnectReason>),
 }
 
-pub struct RdpClient {}
+enum RdpControlFlow {
+    //ReconnectWithNewSize { width: u16, height: u16 },
+    TerminatedGracefully(GracefulDisconnectReason),
+}
+
+trait AsyncReadWrite: AsyncRead + AsyncWrite {}
+
+impl<T> AsyncReadWrite for T where T: AsyncRead + AsyncWrite {}
+
+type UpgradedFramed = ironrdp_tokio::TokioFramed<Box<dyn AsyncReadWrite + Unpin + Send + Sync>>;
+
+pub struct RdpClient {
+    input_receiver: async_channel::Receiver<RdpInputEvent>,
+    output_sender: async_channel::Sender<RdpOutputEvent>,
+}
 
 impl RdpClient {
-    fn connect(&self, host: String, username: String, password: String) {
+    async fn unconnected_loop(&self) {
+        while let Ok(event) = self.input_receiver.recv().await {
+            match event {
+                RdpInputEvent::Connect {
+                    hostname,
+                    username,
+                    password,
+                    width: _,
+                    height: _,
+                } => {
+                    let (connection_result, framed) = match self.connect(hostname, username, password).await {
+                        Ok(result) => result,
+                        Err(e) => {
+                          println!("Failed to connect: {}", e);
+                          break;
+                        }
+                    };
+                    self.active_session(framed, connection_result).await;
+                }
+                _ => {
+                  println!("Unexpected event");
+                }
+            }
+        }
+        println!("Input loop ended");
+    }
+
+    async fn active_session(&self, framed: UpgradedFramed, connection_result: ConnectionResult)  -> SessionResult<RdpControlFlow> {
+        let (mut reader, mut writer) = split_tokio_framed(framed);
+        let mut image = DecodedImage::new(
+            PixelFormat::RgbA32,
+            connection_result.desktop_size.width,
+            connection_result.desktop_size.height,
+        );
+
+        let mut active_stage = ActiveStage::new(connection_result);
+
+        let disconnect_reason = 'outer: loop {
+            let outputs = tokio::select! {
+                frame = reader.read_pdu() => {
+                    let (action, payload) = frame.map_err(|e| session::custom_err!("read frame", e))?;
+                    trace!(?action, frame_length = payload.len(), "Frame received");
+
+                    active_stage.process(&mut image, action, &payload)?
+                }
+                input_event = self.input_receiver.recv() => {
+                    let input_event = input_event.map_err(|_| session::general_err!("GUI is stopped"))?;
+
+                    match input_event {
+                        RdpInputEvent::Close => {
+                            active_stage.graceful_shutdown()?
+                        }
+                        _ => {
+                            println! ("inner loop unhandled event");
+                            Vec::new()
+                        }
+                    }
+                }
+            };
+            for out in outputs {
+                match out {
+                    ActiveStageOutput::ResponseFrame(frame) => writer
+                        .write_all(&frame)
+                        .await
+                        .map_err(|e| session::custom_err!("write response", e))?,
+                    ActiveStageOutput::GraphicsUpdate(_region) => {
+                        let buffer: Vec<u32> = image
+                            .data()
+                            .chunks_exact(4)
+                            .map(|pixel| {
+                                let r = pixel[0];
+                                let g = pixel[1];
+                                let b = pixel[2];
+                                u32::from_be_bytes([0, r, g, b])
+                            })
+                            .collect();
+
+                        self.output_sender
+                            .send(RdpOutputEvent::Image {
+                                buffer,
+                                width: NonZeroU16::new(image.width())
+                                    .ok_or_else(|| session::general_err!("width is zero"))?,
+                                height: NonZeroU16::new(image.height())
+                                    .ok_or_else(|| session::general_err!("height is zero"))?,
+                            });
+                    }
+                    /*
+                    ActiveStageOutput::PointerDefault => {
+                        self.output_sender
+                            .send_event(RdpOutputEvent::PointerDefault)
+                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                    }
+                    ActiveStageOutput::PointerHidden => {
+                        self.output_sender
+                            .send_event(RdpOutputEvent::PointerHidden)
+                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                    }
+                    ActiveStageOutput::PointerPosition { x, y } => {
+                        self.output_sender
+                            .send_event(RdpOutputEvent::PointerPosition { x, y })
+                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                    }
+                    ActiveStageOutput::PointerBitmap(pointer) => {
+                        self.output_sender
+                            .send_event(RdpOutputEvent::PointerBitmap(pointer))
+                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                    }*/
+                    /*
+                    ActiveStageOutput::DeactivateAll(mut connection_activation) => {
+                        // Execute the Deactivation-Reactivation Sequence:
+                        // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/dfc234ce-481a-4674-9a5d-2a7bafb14432
+                        debug!("Received Server Deactivate All PDU, executing Deactivation-Reactivation Sequence");
+                        let mut buf = WriteBuf::new();
+                        'activation_seq: loop {
+                            let written = single_sequence_step_read(&mut reader, &mut *connection_activation, &mut buf)
+                                .await
+                                .map_err(|e| session::custom_err!("read deactivation-reactivation sequence step", e))?;
+
+                            if written.size().is_some() {
+                                writer.write_all(buf.filled()).await.map_err(|e| {
+                                    session::custom_err!("write deactivation-reactivation sequence step", e)
+                                })?;
+                            }
+
+                            if let ConnectionActivationState::Finalized {
+                                io_channel_id,
+                                user_channel_id,
+                                desktop_size,
+                                enable_server_pointer,
+                                pointer_software_rendering,
+                            } = connection_activation.state
+                            {
+                                debug!(?desktop_size, "Deactivation-Reactivation Sequence completed");
+                                // Update image size with the new desktop size.
+                                image = DecodedImage::new(PixelFormat::RgbA32, desktop_size.width, desktop_size.height);
+                                // Update the active stage with the new channel IDs and pointer settings.
+                                active_stage.set_fastpath_processor(
+                                    fast_path::ProcessorBuilder {
+                                        io_channel_id,
+                                        user_channel_id,
+                                        enable_server_pointer,
+                                        pointer_software_rendering,
+                                    }
+                                    .build(),
+                                );
+                                active_stage.set_enable_server_pointer(enable_server_pointer);
+                                break 'activation_seq;
+                            }
+                        }
+                    } */
+                    ActiveStageOutput::Terminate(reason) => break 'outer reason,
+                    _ => {
+                        println!("Unhandled ActiveStageOutput");
+                    }
+                }
+            }
+        };
+        Ok(RdpControlFlow::TerminatedGracefully(disconnect_reason))
+    }
+
+    async fn connect(
+        &self,
+        hostname: String,
+        username: String,
+        password: String,
+    ) -> ConnectorResult<(ConnectionResult, UpgradedFramed)> {
         let codecs: Vec<&str> = vec![];
         let codecs = match client_codecs_capabilities(&codecs) {
             Ok(codecs) => codecs,
@@ -57,7 +251,7 @@ impl RdpClient {
             credentials: Credentials::UsernamePassword { username, password },
             domain: None,
             enable_tls: true,
-            enable_credssp: false,
+            enable_credssp: true,
             keyboard_type: ironrdp::pdu::gcc::KeyboardType::IbmEnhanced,
             keyboard_subtype: 0,
             keyboard_layout: 0, // the server SHOULD use the default active input locale identifier
@@ -93,29 +287,55 @@ impl RdpClient {
             performance_flags: PerformanceFlags::default(),
             timezone_info: TimezoneInfo::default(),
         };
+        let destination = format!("{}:3389", hostname);
+        let stream = TcpStream::connect(destination)
+            .await
+            .map_err(|e| connector::custom_err!("TCP connect", e))?;
+        let client_addr = stream
+            .local_addr()
+            .map_err(|e| connector::custom_err!("get socket local address", e))?;
+        let mut framed = ironrdp_tokio::TokioFramed::new(stream);
+        let mut connector = connector::ClientConnector::new(config, client_addr);
+        // TODO add additional channels for clipboard, sound, filesystem, ...
+
+        let should_upgrade = ironrdp_tokio::connect_begin(&mut framed, &mut connector).await?;
+        debug!("TLS upgrade");
+        // Ensure there is no leftover
+        let (initial_stream, leftover_bytes) = framed.into_inner();
+
+        let (upgraded_stream, server_public_key) = ironrdp_tls::upgrade(initial_stream, &hostname)
+            .await
+            .map_err(|e| connector::custom_err!("TLS upgrade", e))?;
+
+        let upgraded = ironrdp_tokio::mark_as_upgraded(should_upgrade, &mut connector);
+
+        let erased_stream =
+            Box::new(upgraded_stream) as Box<dyn AsyncReadWrite + Unpin + Send + Sync>;
+        let mut upgraded_framed =
+            ironrdp_tokio::TokioFramed::new_with_leftover(erased_stream, leftover_bytes);
+
+        let connection_result = ironrdp_tokio::connect_finalize(
+            upgraded,
+            &mut upgraded_framed,
+            connector,
+            hostname.into(),
+            server_public_key,
+            Some(&mut ReqwestNetworkClient::new()),
+            None,
+        )
+        .await?;
+
+        debug!(?connection_result);
+
+        Ok((connection_result, upgraded_framed))
     }
 }
 
 pub async fn start_rdp(
     input_receiver: async_channel::Receiver<RdpInputEvent>,
-    _output_sender: async_channel::Sender<RdpOutputEvent>,
+    output_sender: async_channel::Sender<RdpOutputEvent>,
 ) {
-    let rdp_client = RdpClient {};
-    while let Ok(event) = input_receiver.recv().await {
-        match event {
-            RdpInputEvent::Connect {hostname, username, password, width: _, height: _} => {
-                rdp_client.connect(hostname, username, password);
-            }
-            RdpInputEvent::Resize { width: _, height: _, scale_factor: _, physical_size: _ } => {
-                println!("Resize event");
-            }
-            RdpInputEvent::Close => {
-                println!("Close event")
-
-            }
-        }
-    }
-    println!("Input loop ended");
+    let rdp_client = RdpClient { input_receiver, output_sender };
+    rdp_client.unconnected_loop().await;
 }
-
 

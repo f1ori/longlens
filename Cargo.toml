@@ -19,8 +19,18 @@ ironrdp = { version = "0.13", features = [
     "displaycontrol",
     "connector",
 ] }
-tokio = { version = "1", features = ["rt-multi-thread"] }
+ironrdp-core = { version = "0.1", features = ["alloc"] }
+ironrdp-tls = { version = "0.1", features = ["rustls"] }
+ironrdp-tokio = { version = "0.7", features = ["reqwest"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7" }
+softbuffer = "0.4"
 
+# Logging
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = "0.3.20"
+
+#Utils
 anyhow = "1"
 semver = "1"
 tap = "1"

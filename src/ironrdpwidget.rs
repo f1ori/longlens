@@ -75,15 +75,16 @@ mod imp {
             let (input_sender, input_receiver) = async_channel::bounded::<RdpInputEvent>(10);
             let (output_sender, output_receiver) = async_channel::bounded::<RdpOutputEvent>(10);
             self.input_sender.set(input_sender).unwrap();
-            runtime().spawn(glib::clone!(
-                #[strong]
-                input_receiver,
-                #[strong]
-                output_sender,
-                async move {
-                    start_rdp(input_receiver, output_sender).await;
-                }
-            ));
+            std::thread::spawn(move || {
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+
+                    rt.block_on(async {
+                        start_rdp(input_receiver, output_sender).await;
+                    });
+                });
 
             glib::spawn_future_local(async move {
                 while let Ok(output_event) = output_receiver.recv().await {
@@ -93,6 +94,9 @@ mod imp {
                         }
                         RdpOutputEvent::ConnectionFailure(_error_message) => {
                             println!("Connection failed");
+                        }
+                        RdpOutputEvent::Image { buffer: _, width: _, height: _ } => {
+                            println!("Image!!!!");
                         }
                     };
                 }

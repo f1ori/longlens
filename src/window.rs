@@ -17,11 +17,13 @@
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+use std::cell::OnceCell;
 
+use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::prelude::*;
 use gtk::{gio, glib};
 
+use crate::destination_object::{DestinationData, DestinationObject};
 use crate::ironrdpwidget::IronRdpWidget;
 
 mod imp {
@@ -40,6 +42,9 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
+        pub destinations_list: TemplateChild<adw::PreferencesGroup>,
+        pub destinations: OnceCell<gio::ListStore>,
+        #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
     }
 
@@ -48,7 +53,11 @@ mod imp {
         #[template_callback]
         fn handle_connectbutton_activated(&self, _button: &adw::ButtonRow) {
             self.stack.set_visible_child_name("connecting");
-            self.rdpwidget.connect_to_server(String::from("localhost"), String::from("flo"), String::from("flo"));
+            self.rdpwidget.connect_to_server(
+                String::from("localhost"),
+                String::from("flo"),
+                String::from("flo"),
+            );
         }
     }
 
@@ -68,7 +77,13 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for FernsichtRdpWindow {}
+    impl ObjectImpl for FernsichtRdpWindow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.obj().setup_destinations();
+            self.obj().load_destinations();
+        }
+    }
     impl WidgetImpl for FernsichtRdpWindow {}
     impl WindowImpl for FernsichtRdpWindow {}
     impl ApplicationWindowImpl for FernsichtRdpWindow {}
@@ -77,7 +92,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct FernsichtRdpWindow(ObjectSubclass<imp::FernsichtRdpWindow>)
-        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,        @implements gio::ActionGroup, gio::ActionMap;
+        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
+        @implements gio::ActionGroup, gio::ActionMap, gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
 }
 
 impl FernsichtRdpWindow {
@@ -85,5 +101,73 @@ impl FernsichtRdpWindow {
         glib::Object::builder()
             .property("application", application)
             .build()
+    }
+
+    fn destinations(&self) -> gio::ListStore {
+        self.imp()
+            .destinations
+            .get()
+            .expect("`destinations` should be set in `setup_destinations`.")
+            .clone()
+    }
+
+    pub fn setup_destinations(&self) {
+        let model = gio::ListStore::new::<DestinationObject>();
+        self.imp()
+            .destinations
+            .set(model.clone())
+            .expect("Could not set destinations");
+
+        self.imp().destinations_list.bind_model(
+            Some(&model),
+            Some(Box::new(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[upgrade_or_panic]
+                move |obj| {
+                    let destination_object = obj
+                        .downcast_ref::<DestinationObject>()
+                        .expect("The object should be of type `DestinationObject`.");
+                    let row = window.create_destination_row(destination_object);
+                    row.upcast()
+                }
+            ))),
+        )
+    }
+
+    pub fn load_destinations(&self) {
+        let data: Vec<DestinationData> = vec![
+            DestinationData {
+                hostname: String::from("localhost"),
+                username: String::from("flo"),
+            },
+            DestinationData {
+                hostname: String::from("testserver"),
+                username: String::from("flo"),
+            },
+        ];
+        let destination_objects: Vec<DestinationObject> = data
+            .into_iter()
+            .map(DestinationObject::from_destination_data)
+            .collect();
+        self.destinations().extend_from_slice(&destination_objects);
+    }
+
+    fn create_destination_row(&self, destination_object: &DestinationObject) -> adw::ActionRow {
+        let row = adw::ActionRow::builder().build();
+
+        destination_object
+            .bind_property("hostname", &row, "title")
+            .sync_create()
+            .build();
+        destination_object
+            .bind_property("username", &row, "subtitle")
+            .transform_to(|_binding, value: glib::Value| {
+                let text = value.get::<String>().unwrap_or_default();
+                Some(format!("User: {}", text).to_value())
+            })
+            .sync_create()
+            .build();
+        row
     }
 }

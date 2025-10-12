@@ -1,13 +1,15 @@
 use core::num::NonZeroU16;
+use ironrdp::connector::connection_activation::ConnectionActivationState;
 use ironrdp::connector::{Credentials, ConnectionResult, ConnectorResult};
 use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use ironrdp::graphics::image_processing::PixelFormat;
 use ironrdp::session::image::DecodedImage;
-use ironrdp::session::{ActiveStage, ActiveStageOutput, GracefulDisconnectReason, SessionResult};
+use ironrdp::session::{fast_path, ActiveStage, ActiveStageOutput, GracefulDisconnectReason, SessionResult};
 use ironrdp::{connector, session};
+use ironrdp_core::WriteBuf;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
-use ironrdp_tokio::{split_tokio_framed, FramedWrite};
+use ironrdp_tokio::{single_sequence_step_read, split_tokio_framed, FramedWrite};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tracing::{debug, trace};
@@ -176,7 +178,6 @@ impl RdpClient {
                             .send_event(RdpOutputEvent::PointerBitmap(pointer))
                             .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
                     }*/
-                    /*
                     ActiveStageOutput::DeactivateAll(mut connection_activation) => {
                         // Execute the Deactivation-Reactivation Sequence:
                         // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/dfc234ce-481a-4674-9a5d-2a7bafb14432
@@ -218,7 +219,7 @@ impl RdpClient {
                                 break 'activation_seq;
                             }
                         }
-                    } */
+                    }
                     ActiveStageOutput::Terminate(reason) => break 'outer reason,
                     _ => {
                         println!("Unhandled ActiveStageOutput");

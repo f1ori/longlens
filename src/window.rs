@@ -18,6 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 use std::cell::OnceCell;
+use std::fs::File;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
@@ -25,6 +26,7 @@ use gtk::{gio, glib};
 
 use crate::destination_object::{DestinationData, DestinationObject};
 use crate::ironrdpwidget::IronRdpWidget;
+use crate::utils::data_path;
 
 mod imp {
     use super::*;
@@ -61,18 +63,22 @@ mod imp {
         }
 
         fn connect(&self) {
+            let hostname = self.hostnameentry.text().to_string();
+            let username = self.usernameentry.text().to_string();
+            let password = self.passwordentry.text().to_string();
             self.stack.set_visible_child_name("connecting");
-            self.rdpwidget.connect_to_server(
-                self.hostnameentry.text().to_string(),
-                self.usernameentry.text().to_string(),
-                self.passwordentry.text().to_string(),
-            );
+            self.obj()
+                .add_destination(hostname.clone(), username.clone());
+            self.obj().save_destinations();
+            self.rdpwidget
+                .connect_to_server(hostname, username, password);
         }
         #[template_callback]
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
             let index = row.index();
             let destination = self
-                .obj().destinations()
+                .obj()
+                .destinations()
                 .item(index as u32)
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
@@ -158,21 +164,40 @@ impl FernsichtRdpWindow {
     }
 
     pub fn load_destinations(&self) {
-        let data: Vec<DestinationData> = vec![
-            DestinationData {
-                hostname: String::from("localhost"),
-                username: String::from("flo"),
-            },
-            DestinationData {
-                hostname: String::from("testserver"),
-                username: String::from("flo"),
-            },
-        ];
-        let destination_objects: Vec<DestinationObject> = data
-            .into_iter()
-            .map(DestinationObject::from_destination_data)
+        if let Ok(file) = File::open(data_path()) {
+            let data: Vec<DestinationData> = serde_json::from_reader(file)
+                .expect("It should be possible to read the connections from the json file.");
+            let destination_objects: Vec<DestinationObject> = data
+                .into_iter()
+                .map(DestinationObject::from_destination_data)
+                .collect();
+            self.destinations().extend_from_slice(&destination_objects);
+        }
+    }
+
+    pub fn add_destination(&self, hostname: String, username: String) {
+        let found = self
+            .destinations()
+            .iter::<DestinationObject>()
+            .filter_map(|destination_object| destination_object.ok())
+            .map(|destination_object| destination_object.destination_data())
+            .find(|o| o.hostname == hostname && o.username == username);
+        if found.is_none() {
+            let destination = DestinationObject::new(hostname, username);
+            self.destinations().append(&destination);
+        }
+    }
+
+    pub fn save_destinations(&self) {
+        // Store task data in vector
+        let data: Vec<DestinationData> = self
+            .destinations()
+            .iter::<DestinationObject>()
+            .filter_map(|destination_object| destination_object.ok())
+            .map(|destination_object| destination_object.destination_data())
             .collect();
-        self.destinations().extend_from_slice(&destination_objects);
+        let file = File::create(data_path()).expect("Could not create json file.");
+        serde_json::to_writer(file, &data).expect("Could not write data to json file");
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> adw::ActionRow {
@@ -196,3 +221,4 @@ impl FernsichtRdpWindow {
         row
     }
 }
+

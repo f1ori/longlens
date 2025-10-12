@@ -24,6 +24,7 @@ mod destination_object;
 mod ironrdpwidget;
 mod rdpclient;
 mod window;
+mod utils;
 
 use self::application::FernsichtRdpApplication;
 use self::window::FernsichtRdpWindow;
@@ -33,6 +34,9 @@ use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use tracing_subscriber;
+
+
+const APP_ID: &str = "de.f1ori.fernsichtrdp";
 
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()
@@ -55,7 +59,7 @@ fn main() -> glib::ExitCode {
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
     let app =
-        FernsichtRdpApplication::new("de.f1ori.fernsichtrdp", &gio::ApplicationFlags::empty());
+        FernsichtRdpApplication::new(APP_ID, &gio::ApplicationFlags::empty());
 
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This

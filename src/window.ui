@@ -37,16 +37,19 @@
                             <child>
                               <object class="AdwEntryRow" id="hostnameentry">
                                 <property name="title">Hostname</property>
+                                <signal name="entry_activated" handler="handle_entries_activated" swapped="yes"/>
                               </object>
                             </child>
                             <child>
                               <object class="AdwEntryRow" id="usernameentry">
                                 <property name="title">Username</property>
+                                <signal name="entry_activated" handler="handle_entries_activated" swapped="yes"/>
                               </object>
                             </child>
                             <child>
                               <object class="AdwPasswordEntryRow" id="passwordentry">
                                 <property name="title">Password</property>
+                                <signal name="entry_activated" handler="handle_entries_activated" swapped="yes"/>
                               </object>
                             </child>
                             <child>
@@ -58,8 +61,16 @@
                           </object>
                         </child>
                         <child>
-                          <object class="AdwPreferencesGroup" id="destinations_list">
+                          <object class="AdwPreferencesGroup">
                             <property name="title">Recently used:</property>
+                            <child>
+                              <object class="GtkListBox" id="destinations_list">
+                                <signal name="row_activated" handler="handle_destinationslist_rowactivated" swapped="yes"/>
+                                <style>
+                                  <class name="boxed-list"/>
+                                </style>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>

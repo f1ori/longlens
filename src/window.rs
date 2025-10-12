@@ -42,7 +42,7 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
-        pub destinations_list: TemplateChild<adw::PreferencesGroup>,
+        pub destinations_list: TemplateChild<gtk::ListBox>,
         pub destinations: OnceCell<gio::ListStore>,
         #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
@@ -51,13 +51,35 @@ mod imp {
     #[gtk::template_callbacks]
     impl FernsichtRdpWindow {
         #[template_callback]
+        fn handle_entries_activated(&self, _entry: &adw::EntryRow) {
+            self.connect();
+        }
+
+        #[template_callback]
         fn handle_connectbutton_activated(&self, _button: &adw::ButtonRow) {
+            self.connect();
+        }
+
+        fn connect(&self) {
             self.stack.set_visible_child_name("connecting");
             self.rdpwidget.connect_to_server(
-                String::from("localhost"),
-                String::from("flo"),
-                String::from("flo"),
+                self.hostnameentry.text().to_string(),
+                self.usernameentry.text().to_string(),
+                self.passwordentry.text().to_string(),
             );
+        }
+        #[template_callback]
+        fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
+            let index = row.index();
+            let destination = self
+                .obj().destinations()
+                .item(index as u32)
+                .expect("There needs to be an object at this position.")
+                .downcast::<DestinationObject>()
+                .expect("The object needs to be a `DestinationObject`.");
+            self.hostnameentry.set_text(&destination.hostname());
+            self.usernameentry.set_text(&destination.username());
+            self.passwordentry.grab_focus();
         }
     }
 
@@ -120,7 +142,7 @@ impl FernsichtRdpWindow {
 
         self.imp().destinations_list.bind_model(
             Some(&model),
-            Some(Box::new(glib::clone!(
+            glib::clone!(
                 #[weak(rename_to = window)]
                 self,
                 #[upgrade_or_panic]
@@ -131,7 +153,7 @@ impl FernsichtRdpWindow {
                     let row = window.create_destination_row(destination_object);
                     row.upcast()
                 }
-            ))),
+            ),
         )
     }
 
@@ -154,7 +176,10 @@ impl FernsichtRdpWindow {
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> adw::ActionRow {
-        let row = adw::ActionRow::builder().build();
+        let row = adw::ActionRow::builder()
+            .activatable(true)
+            .selectable(false)
+            .build();
 
         destination_object
             .bind_property("hostname", &row, "title")

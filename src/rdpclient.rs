@@ -18,6 +18,7 @@ use tracing::{debug, trace};
 pub enum RdpInputEvent {
     Connect {
         hostname: String,
+        port: u16,
         username: String,
         password: String,
         width: u16,
@@ -76,12 +77,13 @@ impl RdpClient {
             match event {
                 RdpInputEvent::Connect {
                     hostname,
+                    port,
                     username,
                     password,
                     width: _,
                     height: _,
                 } => {
-                    let (connection_result, framed) = match self.connect(hostname, username, password).await {
+                    let (connection_result, framed) = match self.connect(hostname, port, username, password).await {
                         Ok(result) => result,
                         Err(e) => {
                           println!("Failed to connect: {}", e);
@@ -233,6 +235,7 @@ impl RdpClient {
     async fn connect(
         &self,
         hostname: String,
+        port: u16,
         username: String,
         password: String,
     ) -> ConnectorResult<(ConnectionResult, UpgradedFramed)> {
@@ -288,7 +291,7 @@ impl RdpClient {
             performance_flags: PerformanceFlags::default(),
             timezone_info: TimezoneInfo::default(),
         };
-        let destination = format!("{}:3389", hostname);
+        let destination = format!("{}:{}", hostname, port);
         let stream = TcpStream::connect(destination)
             .await
             .map_err(|e| connector::custom_err!("TCP connect", e))?;

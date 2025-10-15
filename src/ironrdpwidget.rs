@@ -46,7 +46,7 @@ mod imp {
     }
 
     impl IronRdpWidget {
-        pub fn connect_to_server(&self, hostname: String, username: String, password: String) {
+        pub fn connect_to_server(&self, hostname: String, port: u16, username: String, password: String) {
             let input_sender = self.input_sender.clone();
             glib::spawn_future_local(glib::clone!(
                 #[strong]
@@ -58,6 +58,7 @@ mod imp {
                         .send(RdpInputEvent::Connect {
                             hostname,
                             username,
+                            port,
                             password,
                             width: 768,
                             height: 568,
@@ -114,8 +115,8 @@ glib::wrapper! {
 }
 
 impl IronRdpWidget {
-    pub fn connect_to_server(&self, hostname: String, username: String, password: String) {
-        self.imp().connect_to_server(hostname, username, password);
+    pub fn connect_to_server(&self, hostname: String, port: u16, username: String, password: String) {
+        self.imp().connect_to_server(hostname, port, username, password);
     }
 }
 

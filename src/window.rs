@@ -31,6 +31,18 @@ use crate::utils::data_path;
 mod imp {
     use super::*;
 
+    fn parse_domain_port(input: &str) -> (String, u16) {
+        // Split on the first colon
+        let mut parts = input.splitn(2, ':');
+        let domain = parts.next().unwrap_or("").to_string();
+        let port = parts
+            .next()
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(3389);
+
+        (domain, port)
+    }
+
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/fernsichtrdp/window.ui")]
     pub struct FernsichtRdpWindow {
@@ -70,8 +82,10 @@ mod imp {
             self.obj()
                 .add_destination(hostname.clone(), username.clone());
             self.obj().save_destinations();
+
+            let (domain, port) = parse_domain_port(&hostname);
             self.rdpwidget
-                .connect_to_server(hostname, username, password);
+                .connect_to_server(domain, port, username, password);
         }
         #[template_callback]
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
@@ -166,7 +180,7 @@ impl FernsichtRdpWindow {
     pub fn load_destinations(&self) {
         if let Ok(file) = File::open(data_path()) {
             let data: Vec<DestinationData> = serde_json::from_reader(file)
-                .expect("It should be possible to read the connections from the json file.");
+                .expect("It should be possible to read the destinations from the json file.");
             let destination_objects: Vec<DestinationObject> = data
                 .into_iter()
                 .map(DestinationObject::from_destination_data)

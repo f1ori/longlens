@@ -1,15 +1,17 @@
 use core::num::NonZeroU16;
 use ironrdp::connector::connection_activation::ConnectionActivationState;
-use ironrdp::connector::{Credentials, ConnectionResult, ConnectorResult};
+use ironrdp::connector::{ConnectionResult, ConnectorResult, Credentials};
+use ironrdp::graphics::image_processing::PixelFormat;
 use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
-use ironrdp::graphics::image_processing::PixelFormat;
 use ironrdp::session::image::DecodedImage;
-use ironrdp::session::{fast_path, ActiveStage, ActiveStageOutput, GracefulDisconnectReason, SessionResult};
+use ironrdp::session::{
+    ActiveStage, ActiveStageOutput, GracefulDisconnectReason, SessionResult, fast_path,
+};
 use ironrdp::{connector, session};
 use ironrdp_core::WriteBuf;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
-use ironrdp_tokio::{single_sequence_step_read, split_tokio_framed, FramedWrite};
+use ironrdp_tokio::{FramedWrite, single_sequence_step_read, split_tokio_framed};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tracing::{debug, trace};
@@ -41,7 +43,7 @@ pub enum RdpOutputEvent {
     Connected,
     ConnectionFailure(String),
     Image {
-        buffer: Vec<u32>,
+        buffer: Vec<u8>,
         width: NonZeroU16,
         height: NonZeroU16,
     },
@@ -83,24 +85,31 @@ impl RdpClient {
                     width: _,
                     height: _,
                 } => {
-                    let (connection_result, framed) = match self.connect(hostname, port, username, password).await {
-                        Ok(result) => result,
-                        Err(e) => {
-                          println!("Failed to connect: {}", e);
-                          break;
-                        }
-                    };
-                    self.active_session(framed, connection_result).await;
+                    let (connection_result, framed) =
+                        match self.connect(hostname, port, username, password).await {
+                            Ok(result) => result,
+                            Err(e) => {
+                                println!("Failed to connect: {}", e);
+                                break;
+                            }
+                        };
+                    self.active_session(framed, connection_result)
+                        .await
+                        .expect("Could not activate session");
                 }
                 _ => {
-                  println!("Unexpected event");
+                    println!("Unexpected event");
                 }
             }
         }
         println!("Input loop ended");
     }
 
-    async fn active_session(&self, framed: UpgradedFramed, connection_result: ConnectionResult)  -> SessionResult<RdpControlFlow> {
+    async fn active_session(
+        &self,
+        framed: UpgradedFramed,
+        connection_result: ConnectionResult,
+    ) -> SessionResult<RdpControlFlow> {
         let (mut reader, mut writer) = split_tokio_framed(framed);
         let mut image = DecodedImage::new(
             PixelFormat::RgbA32,
@@ -139,16 +148,7 @@ impl RdpClient {
                         .await
                         .map_err(|e| session::custom_err!("write response", e))?,
                     ActiveStageOutput::GraphicsUpdate(_region) => {
-                        let buffer: Vec<u32> = image
-                            .data()
-                            .chunks_exact(4)
-                            .map(|pixel| {
-                                let r = pixel[0];
-                                let g = pixel[1];
-                                let b = pixel[2];
-                                u32::from_be_bytes([0, r, g, b])
-                            })
-                            .collect();
+                        let buffer: Vec<u8> = image.data().to_vec();
 
                         self.output_sender
                             .send(RdpOutputEvent::Image {
@@ -157,7 +157,9 @@ impl RdpClient {
                                     .ok_or_else(|| session::general_err!("width is zero"))?,
                                 height: NonZeroU16::new(image.height())
                                     .ok_or_else(|| session::general_err!("height is zero"))?,
-                            });
+                            })
+                            .await
+                            .expect("Could not send Image event");
                     }
                     /*
                     ActiveStageOutput::PointerDefault => {
@@ -183,16 +185,30 @@ impl RdpClient {
                     ActiveStageOutput::DeactivateAll(mut connection_activation) => {
                         // Execute the Deactivation-Reactivation Sequence:
                         // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/dfc234ce-481a-4674-9a5d-2a7bafb14432
-                        debug!("Received Server Deactivate All PDU, executing Deactivation-Reactivation Sequence");
+                        debug!(
+                            "Received Server Deactivate All PDU, executing Deactivation-Reactivation Sequence"
+                        );
                         let mut buf = WriteBuf::new();
                         'activation_seq: loop {
-                            let written = single_sequence_step_read(&mut reader, &mut *connection_activation, &mut buf)
-                                .await
-                                .map_err(|e| session::custom_err!("read deactivation-reactivation sequence step", e))?;
+                            let written = single_sequence_step_read(
+                                &mut reader,
+                                &mut *connection_activation,
+                                &mut buf,
+                            )
+                            .await
+                            .map_err(|e| {
+                                session::custom_err!(
+                                    "read deactivation-reactivation sequence step",
+                                    e
+                                )
+                            })?;
 
                             if written.size().is_some() {
                                 writer.write_all(buf.filled()).await.map_err(|e| {
-                                    session::custom_err!("write deactivation-reactivation sequence step", e)
+                                    session::custom_err!(
+                                        "write deactivation-reactivation sequence step",
+                                        e
+                                    )
                                 })?;
                             }
 
@@ -204,9 +220,16 @@ impl RdpClient {
                                 pointer_software_rendering,
                             } = connection_activation.state
                             {
-                                debug!(?desktop_size, "Deactivation-Reactivation Sequence completed");
+                                debug!(
+                                    ?desktop_size,
+                                    "Deactivation-Reactivation Sequence completed"
+                                );
                                 // Update image size with the new desktop size.
-                                image = DecodedImage::new(PixelFormat::RgbA32, desktop_size.width, desktop_size.height);
+                                image = DecodedImage::new(
+                                    PixelFormat::RgbA32,
+                                    desktop_size.width,
+                                    desktop_size.height,
+                                );
                                 // Update the active stage with the new channel IDs and pointer settings.
                                 active_stage.set_fastpath_processor(
                                     fast_path::ProcessorBuilder {
@@ -339,7 +362,10 @@ pub async fn start_rdp(
     input_receiver: async_channel::Receiver<RdpInputEvent>,
     output_sender: async_channel::Sender<RdpOutputEvent>,
 ) {
-    let rdp_client = RdpClient { input_receiver, output_sender };
+    let rdp_client = RdpClient {
+        input_receiver,
+        output_sender,
+    };
     rdp_client.unconnected_loop().await;
 }
 

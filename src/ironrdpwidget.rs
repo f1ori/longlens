@@ -20,15 +20,10 @@
 
 use crate::rdpclient::{RdpInputEvent, RdpOutputEvent, start_rdp};
 use gtk::glib;
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use std::cell::OnceCell;
-use std::sync::OnceLock;
-use tokio::runtime::Runtime;
 
-fn runtime() -> &'static Runtime {
-    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| Runtime::new().expect("Setting up tokio runtime needs to succeed."))
-}
 
 mod imp {
     use super::*;
@@ -36,6 +31,7 @@ mod imp {
     #[derive(Default)]
     pub struct IronRdpWidget {
         input_sender: OnceCell<async_channel::Sender<RdpInputEvent>>,
+        texture: std::cell::RefCell<Option<gdk::MemoryTexture>>,
     }
 
     #[glib::object_subclass]
@@ -46,7 +42,13 @@ mod imp {
     }
 
     impl IronRdpWidget {
-        pub fn connect_to_server(&self, hostname: String, port: u16, username: String, password: String) {
+        pub fn connect_to_server(
+            &self,
+            hostname: String,
+            port: u16,
+            username: String,
+            password: String,
+        ) {
             let input_sender = self.input_sender.clone();
             glib::spawn_future_local(glib::clone!(
                 #[strong]
@@ -68,6 +70,34 @@ mod imp {
                 }
             ));
         }
+
+        fn process_message(&self, output_event: RdpOutputEvent) -> glib::ControlFlow {
+            match output_event {
+                RdpOutputEvent::Connected => {
+                    println!("Connected!");
+                }
+                RdpOutputEvent::ConnectionFailure(_error_message) => {
+                    println!("Connection failed");
+                }
+                RdpOutputEvent::Image {
+                    buffer,
+                    width,
+                    height,
+                } => {
+                    let bytes = glib::Bytes::from_owned(buffer);
+                    *self.texture.borrow_mut() = Some(gdk::MemoryTexture::new(
+                        width.get().into(),
+                        height.get().into(),
+                        gdk::MemoryFormat::R8g8b8x8,
+                        &bytes,
+                        (width.get() * 4).into(),
+                    ));
+                    self.obj().queue_draw();
+                }
+            }
+
+            glib::ControlFlow::Continue
+        }
     }
     impl ObjectImpl for IronRdpWidget {
         fn constructed(&self) {
@@ -77,35 +107,54 @@ mod imp {
             let (output_sender, output_receiver) = async_channel::bounded::<RdpOutputEvent>(10);
             self.input_sender.set(input_sender).unwrap();
             std::thread::spawn(move || {
-                    let rt = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .unwrap();
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
 
-                    rt.block_on(async {
-                        start_rdp(input_receiver, output_sender).await;
-                    });
+                rt.block_on(async {
+                    start_rdp(input_receiver, output_sender).await;
                 });
-
-            glib::spawn_future_local(async move {
-                while let Ok(output_event) = output_receiver.recv().await {
-                    match output_event {
-                        RdpOutputEvent::Connected => {
-                            println!("Connected!");
-                        }
-                        RdpOutputEvent::ConnectionFailure(_error_message) => {
-                            println!("Connection failed");
-                        }
-                        RdpOutputEvent::Image { buffer: _, width: _, height: _ } => {
-                            println!("Image!!!!");
-                        }
-                    };
-                }
             });
+
+            glib::spawn_future_local(glib::clone!(
+                #[strong]
+                output_receiver,
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    while let Ok(output_event) = output_receiver.recv().await {
+                        imp.process_message(output_event);
+                    }
+                }
+            ));
         }
     }
 
-    impl WidgetImpl for IronRdpWidget {}
+    impl WidgetImpl for IronRdpWidget {
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            if let Some(texture) = self.texture.borrow().as_ref() {
+                // Render texture at 0,0
+                snapshot.append_texture(
+                    texture,
+                    &gtk::graphene::Rect::new(
+                        0.0,
+                        0.0,
+                        texture.width() as f32,
+                        texture.height() as f32,
+                    ),
+                );
+            } else {
+                // Draw a fallback background
+                snapshot.append_color(
+                    &gdk::RGBA::BLACK,
+                    &gtk::graphene::Rect::new(0.0, 0.0, 100.0, 100.0),
+                );
+            }
+
+            self.parent_snapshot(snapshot)
+        }
+    }
 }
 
 glib::wrapper! {
@@ -115,8 +164,15 @@ glib::wrapper! {
 }
 
 impl IronRdpWidget {
-    pub fn connect_to_server(&self, hostname: String, port: u16, username: String, password: String) {
-        self.imp().connect_to_server(hostname, port, username, password);
+    pub fn connect_to_server(
+        &self,
+        hostname: String,
+        port: u16,
+        username: String,
+        password: String,
+    ) {
+        self.imp()
+            .connect_to_server(hostname, port, username, password);
     }
 }
 

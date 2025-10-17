@@ -78,7 +78,7 @@ mod imp {
             let hostname = self.hostnameentry.text().to_string();
             let username = self.usernameentry.text().to_string();
             let password = self.passwordentry.text().to_string();
-            self.stack.set_visible_child_name("connecting");
+            self.stack.set_visible_child_name("rdppage");
             self.obj()
                 .add_destination(hostname.clone(), username.clone());
             self.obj().save_destinations();

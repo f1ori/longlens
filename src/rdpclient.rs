@@ -81,11 +81,11 @@ impl RdpClient {
                     port,
                     username,
                     password,
-                    width: _,
-                    height: _,
+                    width,
+                    height,
                 } => {
                     let (connection_result, framed) =
-                        match self.connect(hostname, port, username, password).await {
+                        match self.connect(hostname, port, username, password, width, height).await {
                             Ok(result) => result,
                             Err(e) => {
                                 println!("Failed to connect: {}", e);
@@ -275,6 +275,8 @@ impl RdpClient {
         port: u16,
         username: String,
         password: String,
+        width: u16,
+        height: u16,
     ) -> ConnectorResult<(ConnectionResult, UpgradedFramed)> {
         let codecs: Vec<&str> = vec![];
         let codecs = match client_codecs_capabilities(&codecs) {
@@ -300,8 +302,8 @@ impl RdpClient {
             ime_file_name: String::from(""),
             dig_product_id: String::from(""),
             desktop_size: connector::DesktopSize {
-                width: 1024,
-                height: 768,
+                width,
+                height,
             },
             desktop_scale_factor: 0, // Default to 0 per FreeRDP
             bitmap: Some(bitmap),

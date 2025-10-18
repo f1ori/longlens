@@ -62,6 +62,8 @@ mod imp {
             username: String,
             password: String,
         ) {
+            let width: u16 = self.obj().width().try_into().unwrap();
+            let height: u16 = self.obj().height().try_into().unwrap();
             self.obj().set_state(RdpState::Connecting);
             glib::spawn_future_local(glib::clone!(
                 #[strong(rename_to=sender)]
@@ -75,8 +77,8 @@ mod imp {
                             username,
                             port,
                             password,
-                            width: 768,
-                            height: 568,
+                            width,
+                            height,
                         })
                         .await
                         .expect("The channel needs to be open.");

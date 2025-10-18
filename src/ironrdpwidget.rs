@@ -19,17 +19,30 @@
  */
 
 use crate::rdpclient::{RdpInputEvent, RdpOutputEvent, start_rdp};
-use gtk::glib;
+use gtk::glib::{self, Properties};
+use gtk::glib::prelude::*;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
+#[enum_type(name = "RdpState")]
+pub enum RdpState {
+    #[default]
+    Disconnected = 0,
+    Connecting = 1,
+    Connected = 2,
+}
 
 mod imp {
     use super::*;
 
-    #[derive(Default)]
+    #[derive(Properties, Default)]
+    #[properties(wrapper_type = super::IronRdpWidget)]
     pub struct IronRdpWidget {
+        #[property(get, set, builder(RdpState::Disconnected))]
+        state: Cell<RdpState>,
         input_sender: OnceCell<async_channel::Sender<RdpInputEvent>>,
         texture: std::cell::RefCell<Option<gdk::MemoryTexture>>,
     }
@@ -49,12 +62,12 @@ mod imp {
             username: String,
             password: String,
         ) {
-            let input_sender = self.input_sender.clone();
+            self.obj().set_state(RdpState::Connecting);
             glib::spawn_future_local(glib::clone!(
-                #[strong]
-                input_sender,
+                #[strong(rename_to=sender)]
+                self.input_sender.clone(),
                 async move {
-                    input_sender
+                    sender
                         .get()
                         .unwrap()
                         .send(RdpInputEvent::Connect {
@@ -71,13 +84,32 @@ mod imp {
             ));
         }
 
+        pub fn disconnect(&self) {
+            glib::spawn_future_local(glib::clone!(
+                #[strong(rename_to=sender)]
+                self.input_sender.clone(),
+                async move {
+                    sender
+                        .get()
+                        .unwrap()
+                        .send(RdpInputEvent::Close {})
+                        .await
+                        .expect("The channel needs to be open.");
+                }
+            ));
+        }
+
         fn process_message(&self, output_event: RdpOutputEvent) -> glib::ControlFlow {
             match output_event {
                 RdpOutputEvent::Connected => {
-                    println!("Connected!");
+                    self.obj().set_state(RdpState::Connected);
                 }
-                RdpOutputEvent::ConnectionFailure(_error_message) => {
-                    println!("Connection failed");
+                RdpOutputEvent::Terminated(Ok(_reason)) => {
+                    self.obj().set_state(RdpState::Disconnected);
+                }
+                RdpOutputEvent::Terminated(Err(reason)) => {
+                    self.obj().set_state(RdpState::Disconnected);
+                    println!("Error {}", reason);
                 }
                 RdpOutputEvent::Image {
                     buffer,
@@ -99,6 +131,8 @@ mod imp {
             glib::ControlFlow::Continue
         }
     }
+
+    #[glib::derived_properties]
     impl ObjectImpl for IronRdpWidget {
         fn constructed(&self) {
             self.parent_constructed();
@@ -134,7 +168,6 @@ mod imp {
     impl WidgetImpl for IronRdpWidget {
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             if let Some(texture) = self.texture.borrow().as_ref() {
-                // Render texture at 0,0
                 snapshot.append_texture(
                     texture,
                     &gtk::graphene::Rect::new(
@@ -173,6 +206,10 @@ impl IronRdpWidget {
     ) {
         self.imp()
             .connect_to_server(hostname, port, username, password);
+    }
+
+    pub fn disconnect(&self) {
+        self.imp().disconnect();
     }
 }
 

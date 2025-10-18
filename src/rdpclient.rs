@@ -41,7 +41,6 @@ pub enum RdpInputEvent {
 #[derive(Debug)]
 pub enum RdpOutputEvent {
     Connected,
-    ConnectionFailure(String),
     Image {
         buffer: Vec<u8>,
         width: NonZeroU16,
@@ -54,7 +53,7 @@ pub enum RdpOutputEvent {
     //     y: u16,
     // },
     // PointerBitmap(Arc<DecodedPointer>),
-    // Terminated(SessionResult<GracefulDisconnectReason>),
+    Terminated(SessionResult<GracefulDisconnectReason>),
 }
 
 enum RdpControlFlow {
@@ -90,12 +89,27 @@ impl RdpClient {
                             Ok(result) => result,
                             Err(e) => {
                                 println!("Failed to connect: {}", e);
-                                break;
+                                continue;
                             }
                         };
-                    self.active_session(framed, connection_result)
+                    self.output_sender
+                        .send(RdpOutputEvent::Connected {})
                         .await
-                        .expect("Could not activate session");
+                        .expect("Channel broken");
+                    match self.active_session(framed, connection_result).await {
+                        Ok(RdpControlFlow::TerminatedGracefully(reason)) => {
+                            self.output_sender
+                                .send(RdpOutputEvent::Terminated(Ok(reason)))
+                                .await
+                                .expect("Channel broken");
+                        }
+                        Err(e) => {
+                            self.output_sender
+                                .send(RdpOutputEvent::Terminated(Err(e)))
+                                .await
+                                .expect("Channel broken");
+                        }
+                    }
                 }
                 _ => {
                     println!("Unexpected event");

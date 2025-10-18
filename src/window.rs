@@ -25,7 +25,7 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::destination_object::{DestinationData, DestinationObject};
-use crate::ironrdpwidget::IronRdpWidget;
+use crate::ironrdpwidget::{IronRdpWidget, RdpState};
 use crate::utils::data_path;
 
 mod imp {
@@ -59,9 +59,10 @@ mod imp {
         pub destinations_list: TemplateChild<gtk::ListBox>,
         pub destinations: OnceCell<gio::ListStore>,
         #[template_child]
+        pub disconnectbutton: TemplateChild<gtk::Button>,
+        #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
     }
-
     #[gtk::template_callbacks]
     impl FernsichtRdpWindow {
         #[template_callback]
@@ -78,7 +79,6 @@ mod imp {
             let hostname = self.hostnameentry.text().to_string();
             let username = self.usernameentry.text().to_string();
             let password = self.passwordentry.text().to_string();
-            self.stack.set_visible_child_name("rdppage");
             self.obj()
                 .add_destination(hostname.clone(), username.clone());
             self.obj().save_destinations();
@@ -87,6 +87,7 @@ mod imp {
             self.rdpwidget
                 .connect_to_server(domain, port, username, password);
         }
+
         #[template_callback]
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
             let index = row.index();
@@ -100,6 +101,11 @@ mod imp {
             self.hostnameentry.set_text(&destination.hostname());
             self.usernameentry.set_text(&destination.username());
             self.passwordentry.grab_focus();
+        }
+
+        #[template_callback]
+        fn handle_disconnectbutton_clicked(&self, _button: &gtk::Button) {
+            self.rdpwidget.disconnect();
         }
     }
 
@@ -124,6 +130,32 @@ mod imp {
             self.parent_constructed();
             self.obj().setup_destinations();
             self.obj().load_destinations();
+            // Only show disconnect button on rdppage
+            self.stack
+                .bind_property::<gtk::Button>(
+                    "visible-child-name",
+                    self.disconnectbutton.as_ref(),
+                    "visible",
+                )
+                .transform_to(|_binding, value: glib::Value| {
+                    let name = value.get::<String>().unwrap_or_default();
+                    Some((name == "rdppage").to_value())
+                })
+                .sync_create()
+                .build();
+            // bind page to connection state
+            self.rdpwidget
+                .bind_property::<gtk::Stack>("state", self.stack.as_ref(), "visible-child-name")
+                .transform_to(|_binding, value: glib::Value| {
+                    let state = value.get::<RdpState>().unwrap_or_default();
+                    Some(if state == RdpState::Connected {
+                        "rdppage"
+                    } else {
+                        "destinationspage"
+                    })
+                })
+                .sync_create()
+                .build();
         }
     }
     impl WidgetImpl for FernsichtRdpWindow {}

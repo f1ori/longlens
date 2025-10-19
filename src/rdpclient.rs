@@ -1,7 +1,11 @@
 use core::num::NonZeroU16;
+use std::sync::Arc;
+
 use ironrdp::connector::connection_activation::ConnectionActivationState;
 use ironrdp::connector::{ConnectionResult, ConnectorResult, Credentials};
 use ironrdp::graphics::image_processing::PixelFormat;
+use ironrdp::graphics::pointer::DecodedPointer;
+use ironrdp::pdu::input::fast_path::FastPathInputEvent;
 use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use ironrdp::session::image::DecodedImage;
@@ -12,6 +16,7 @@ use ironrdp::{connector, session};
 use ironrdp_core::WriteBuf;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{FramedWrite, single_sequence_step_read, split_tokio_framed};
+use smallvec::SmallVec;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tracing::{debug, trace};
@@ -33,7 +38,7 @@ pub enum RdpInputEvent {
         /// The physical size of the display in millimeters (width, height).
         physical_size: Option<(u32, u32)>,
     },
-    // FastPath(SmallVec<[FastPathInputEvent; 2]>),
+    FastPath(SmallVec<[FastPathInputEvent; 2]>),
     Close,
     //Clipboard(ClipboardMessage),
 }
@@ -46,13 +51,13 @@ pub enum RdpOutputEvent {
         width: NonZeroU16,
         height: NonZeroU16,
     },
-    // PointerDefault,
-    // PointerHidden,
-    // PointerPosition {
-    //     x: u16,
-    //     y: u16,
-    // },
-    // PointerBitmap(Arc<DecodedPointer>),
+    PointerDefault,
+    PointerHidden,
+    PointerPosition {
+        x: u16,
+        y: u16,
+    },
+    PointerBitmap(Arc<DecodedPointer>),
     Terminated(SessionResult<GracefulDisconnectReason>),
 }
 
@@ -84,14 +89,16 @@ impl RdpClient {
                     width,
                     height,
                 } => {
-                    let (connection_result, framed) =
-                        match self.connect(hostname, port, username, password, width, height).await {
-                            Ok(result) => result,
-                            Err(e) => {
-                                println!("Failed to connect: {}", e);
-                                continue;
-                            }
-                        };
+                    let (connection_result, framed) = match self
+                        .connect(hostname, port, username, password, width, height)
+                        .await
+                    {
+                        Ok(result) => result,
+                        Err(e) => {
+                            println!("Failed to connect: {}", e);
+                            continue;
+                        }
+                    };
                     self.output_sender
                         .send(RdpOutputEvent::Connected {})
                         .await
@@ -148,6 +155,10 @@ impl RdpClient {
                         RdpInputEvent::Close => {
                             active_stage.graceful_shutdown()?
                         }
+                        RdpInputEvent::FastPath(events) => {
+                            trace!(?events);
+                            active_stage.process_fastpath_input(&mut image, &events)?
+                        }
                         _ => {
                             println! ("inner loop unhandled event");
                             Vec::new()
@@ -175,27 +186,30 @@ impl RdpClient {
                             .await
                             .expect("Could not send Image event");
                     }
-                    /*
                     ActiveStageOutput::PointerDefault => {
                         self.output_sender
-                            .send_event(RdpOutputEvent::PointerDefault)
-                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                            .send(RdpOutputEvent::PointerDefault)
+                            .await
+                            .expect("Could not send pointer default");
                     }
                     ActiveStageOutput::PointerHidden => {
                         self.output_sender
-                            .send_event(RdpOutputEvent::PointerHidden)
-                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                            .send(RdpOutputEvent::PointerHidden)
+                            .await
+                            .expect("Could not send pointer hidden");
                     }
                     ActiveStageOutput::PointerPosition { x, y } => {
                         self.output_sender
-                            .send_event(RdpOutputEvent::PointerPosition { x, y })
-                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
+                            .send(RdpOutputEvent::PointerPosition { x, y })
+                            .await
+                            .expect("Could not send pointer event");
                     }
                     ActiveStageOutput::PointerBitmap(pointer) => {
                         self.output_sender
-                            .send_event(RdpOutputEvent::PointerBitmap(pointer))
-                            .map_err(|e| session::custom_err!("event_loop_proxy", e))?;
-                    }*/
+                            .send(RdpOutputEvent::PointerBitmap(pointer))
+                            .await
+                            .expect("Could not send pointer bitmap");
+                    }
                     ActiveStageOutput::DeactivateAll(mut connection_activation) => {
                         // Execute the Deactivation-Reactivation Sequence:
                         // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/dfc234ce-481a-4674-9a5d-2a7bafb14432
@@ -260,9 +274,6 @@ impl RdpClient {
                         }
                     }
                     ActiveStageOutput::Terminate(reason) => break 'outer reason,
-                    _ => {
-                        println!("Unhandled ActiveStageOutput");
-                    }
                 }
             }
         };
@@ -301,10 +312,7 @@ impl RdpClient {
             keyboard_functional_keys_count: 12,
             ime_file_name: String::from(""),
             dig_product_id: String::from(""),
-            desktop_size: connector::DesktopSize {
-                width,
-                height,
-            },
+            desktop_size: connector::DesktopSize { width, height },
             desktop_scale_factor: 0, // Default to 0 per FreeRDP
             bitmap: Some(bitmap),
             client_build: 42,

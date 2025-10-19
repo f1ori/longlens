@@ -19,12 +19,11 @@
  */
 
 use crate::rdpclient::{RdpInputEvent, RdpOutputEvent, start_rdp};
-use gtk::glib::{self, Properties};
 use gtk::glib::prelude::*;
+use gtk::glib::{self, Properties};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use std::cell::{Cell, OnceCell};
-
+use std::cell::{Cell, OnceCell, RefCell};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
 #[enum_type(name = "RdpState")]
@@ -44,7 +43,8 @@ mod imp {
         #[property(get, set, builder(RdpState::Disconnected))]
         state: Cell<RdpState>,
         input_sender: OnceCell<async_channel::Sender<RdpInputEvent>>,
-        texture: std::cell::RefCell<Option<gdk::MemoryTexture>>,
+        texture: RefCell<Option<gdk::MemoryTexture>>,
+        input_database: OnceCell<RefCell<ironrdp::input::Database>>,
     }
 
     #[glib::object_subclass]
@@ -128,9 +128,36 @@ mod imp {
                     ));
                     self.obj().queue_draw();
                 }
+                RdpOutputEvent::PointerDefault => {
+                    println!("PointerDefault");
+                }
+                RdpOutputEvent::PointerHidden => {
+                    println!("PointerHidden");
+                }
+                RdpOutputEvent::PointerPosition { x, y } => {
+                    println!("PointerPosition {} {}", x, y);
+                }
+                RdpOutputEvent::PointerBitmap(_bitmap) => {
+                    println!("PointerBitmap");
+                }
             }
 
             glib::ControlFlow::Continue
+        }
+
+        fn send_fast_path_events(
+            &self,
+            input_events: smallvec::SmallVec<
+                [ironrdp::pdu::input::fast_path::FastPathInputEvent; 2],
+            >,
+        ) {
+            if !input_events.is_empty() {
+                let _ = self
+                    .input_sender
+                    .get()
+                    .unwrap()
+                    .send_blocking(RdpInputEvent::FastPath(input_events));
+            }
         }
     }
 
@@ -138,6 +165,12 @@ mod imp {
     impl ObjectImpl for IronRdpWidget {
         fn constructed(&self) {
             self.parent_constructed();
+
+            assert!(
+                self.input_database
+                    .set(RefCell::new(ironrdp::input::Database::new()))
+                    .is_ok()
+            );
 
             let (input_sender, input_receiver) = async_channel::bounded::<RdpInputEvent>(10);
             let (output_sender, output_receiver) = async_channel::bounded::<RdpOutputEvent>(10);
@@ -164,6 +197,73 @@ mod imp {
                     }
                 }
             ));
+
+            let event_controller = gtk::EventControllerLegacy::new();
+            event_controller.connect_event(glib::clone!(
+                #[weak(rename_to=imp)]
+                self,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_controller, event: &gdk::Event| -> glib::Propagation {
+                    match event.event_type() {
+                        gdk::EventType::ButtonRelease | gdk::EventType::ButtonPress => {
+                            let button_event =
+                                event.clone().downcast::<gdk::ButtonEvent>().unwrap();
+                            let mouse_button = match button_event.button() {
+                                gdk::BUTTON_PRIMARY => ironrdp::input::MouseButton::Left,
+                                gdk::BUTTON_SECONDARY => ironrdp::input::MouseButton::Right,
+                                gdk::BUTTON_MIDDLE => ironrdp::input::MouseButton::Middle,
+                                _ => {
+                                    return glib::Propagation::Proceed;
+                                }
+                            };
+                            let operation = match event.event_type() {
+                                gdk::EventType::ButtonPress => {
+                                    ironrdp::input::Operation::MouseButtonPressed(mouse_button)
+                                }
+                                gdk::EventType::ButtonRelease => {
+                                    ironrdp::input::Operation::MouseButtonReleased(mouse_button)
+                                }
+                                _ => {
+                                    return glib::Propagation::Proceed;
+                                }
+                            };
+                            let input_events = imp
+                                .input_database
+                                .get()
+                                .unwrap()
+                                .borrow_mut()
+                                .apply(core::iter::once(operation));
+                            imp.send_fast_path_events(input_events);
+                            glib::Propagation::Stop
+                        }
+                        gdk::EventType::MotionNotify => {
+                            let motion_event =
+                                event.clone().downcast::<gdk::MotionEvent>().unwrap();
+                            if let Some((x, y)) = motion_event.position() {
+                                let operation = ironrdp::input::Operation::MouseMove(
+                                    ironrdp::input::MousePosition {
+                                        x: x as u16,
+                                        y:y as u16 ,
+                                    },
+                                );
+                                let input_events = imp
+                                    .input_database
+                                    .get()
+                                    .unwrap()
+                                    .borrow_mut()
+                                    .apply(core::iter::once(operation));
+                                imp.send_fast_path_events(input_events);
+                                glib::Propagation::Stop
+                            } else {
+                                glib::Propagation::Proceed
+                            }
+                        }
+                        _ => glib::Propagation::Proceed,
+                    }
+                }
+            ));
+            self.obj().add_controller(event_controller);
         }
     }
 

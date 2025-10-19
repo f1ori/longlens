@@ -914,6 +914,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "smallvec",
  "softbuffer",
  "tap",
  "tokio",

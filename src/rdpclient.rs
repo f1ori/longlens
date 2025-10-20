@@ -19,7 +19,7 @@ use ironrdp_tokio::{FramedWrite, single_sequence_step_read, split_tokio_framed};
 use smallvec::SmallVec;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 #[derive(Debug)]
 pub enum RdpInputEvent {
@@ -118,8 +118,14 @@ impl RdpClient {
                         }
                     }
                 }
-                _ => {
-                    println!("Unexpected event");
+                RdpInputEvent::Close => {
+                    warn!("Unexpected close");
+                }
+                RdpInputEvent::FastPath(_) => {
+                    warn!("Unexpected fast path");
+                }
+                RdpInputEvent::Resize { width: _, height: _, scale_factor: _, physical_size: _ } => {
+                    warn!("Unexpected resize");
                 }
             }
         }

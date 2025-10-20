@@ -84,8 +84,10 @@ mod imp {
             self.obj().save_destinations();
 
             let (domain, port) = parse_domain_port(&hostname);
+            let width = self.stack.width() as u16;
+            let height = self.stack.height() as u16;
             self.rdpwidget
-                .connect_to_server(domain, port, username, password);
+                .connect_to_server(domain, port, username, password, width, height);
         }
 
         #[template_callback]

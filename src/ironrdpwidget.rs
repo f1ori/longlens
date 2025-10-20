@@ -24,7 +24,7 @@ use gtk::glib::{self, Properties};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, OnceCell, RefCell};
-use tracing::debug;
+use tracing::{debug, info};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
@@ -63,9 +63,10 @@ mod imp {
             port: u16,
             username: String,
             password: String,
+            width: u16,
+            height: u16
         ) {
-            let width: u16 = self.obj().width().try_into().unwrap();
-            let height: u16 = self.obj().height().try_into().unwrap();
+            info!("widthxheight {} {}", width, height);
             self.obj().set_state(RdpState::Connecting);
             glib::spawn_future_local(glib::clone!(
                 #[strong(rename_to=sender)]
@@ -106,9 +107,11 @@ mod imp {
         fn process_message(&self, output_event: RdpOutputEvent) -> glib::ControlFlow {
             match output_event {
                 RdpOutputEvent::Connected => {
+                    info!("State connected");
                     self.obj().set_state(RdpState::Connected);
                 }
-                RdpOutputEvent::Terminated(Ok(_reason)) => {
+                RdpOutputEvent::Terminated(Ok(reason)) => {
+                    info!("State disconnected {}", reason);
                     self.obj().set_state(RdpState::Disconnected);
                 }
                 RdpOutputEvent::Terminated(Err(reason)) => {
@@ -221,6 +224,9 @@ mod imp {
                 #[weak(rename_to=imp)]
                 self,
                 move |_controller, x, y| {
+                    if imp.state.get() != RdpState::Connected {
+                        return;
+                    }
                     let operation = ironrdp::input::Operation::MouseMove(
                         ironrdp::input::MousePosition {
                             x: x as u16,
@@ -322,9 +328,11 @@ impl IronRdpWidget {
         port: u16,
         username: String,
         password: String,
+        width: u16,
+        height: u16
     ) {
         self.imp()
-            .connect_to_server(hostname, port, username, password);
+            .connect_to_server(hostname, port, username, password, width, height);
     }
 
     pub fn disconnect(&self) {

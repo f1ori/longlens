@@ -216,6 +216,27 @@ mod imp {
                 }
             ));
 
+            let event_controller_motion = gtk::EventControllerMotion::new();
+            event_controller_motion.connect_motion(glib::clone!(
+                #[weak(rename_to=imp)]
+                self,
+                move |_controller, x, y| {
+                    let operation = ironrdp::input::Operation::MouseMove(
+                        ironrdp::input::MousePosition {
+                            x: x as u16,
+                            y: y as u16,
+                        },
+                    );
+                    let input_events = imp
+                        .input_database
+                        .get()
+                        .unwrap()
+                        .borrow_mut()
+                        .apply(core::iter::once(operation));
+                    imp.send_fast_path_events(input_events);
+            }));
+            self.obj().add_controller(event_controller_motion);
+
             let event_controller = gtk::EventControllerLegacy::new();
             event_controller.connect_event(glib::clone!(
                 #[weak(rename_to=imp)]
@@ -254,28 +275,6 @@ mod imp {
                                 .apply(core::iter::once(operation));
                             imp.send_fast_path_events(input_events);
                             glib::Propagation::Stop
-                        }
-                        gdk::EventType::MotionNotify => {
-                            let motion_event =
-                                event.clone().downcast::<gdk::MotionEvent>().unwrap();
-                            if let Some((x, y)) = motion_event.position() {
-                                let operation = ironrdp::input::Operation::MouseMove(
-                                    ironrdp::input::MousePosition {
-                                        x: x as u16,
-                                        y: y as u16,
-                                    },
-                                );
-                                let input_events = imp
-                                    .input_database
-                                    .get()
-                                    .unwrap()
-                                    .borrow_mut()
-                                    .apply(core::iter::once(operation));
-                                imp.send_fast_path_events(input_events);
-                                glib::Propagation::Stop
-                            } else {
-                                glib::Propagation::Proceed
-                            }
                         }
                         _ => glib::Propagation::Proceed,
                     }

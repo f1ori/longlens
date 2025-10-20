@@ -24,6 +24,8 @@ use gtk::glib::{self, Properties};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, OnceCell, RefCell};
+use tracing::debug;
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
 #[enum_type(name = "RdpState")]
@@ -129,16 +131,32 @@ mod imp {
                     self.obj().queue_draw();
                 }
                 RdpOutputEvent::PointerDefault => {
-                    println!("PointerDefault");
+                    let cursor = gdk::Cursor::from_name("default", None);
+                    self.obj().set_cursor(cursor.as_ref());
                 }
                 RdpOutputEvent::PointerHidden => {
-                    println!("PointerHidden");
+                    let cursor = gdk::Cursor::from_name("none", None);
+                    self.obj().set_cursor(cursor.as_ref());
                 }
                 RdpOutputEvent::PointerPosition { x, y } => {
-                    println!("PointerPosition {} {}", x, y);
+                    debug!("PointerPosition {} {}", x, y);
                 }
-                RdpOutputEvent::PointerBitmap(_bitmap) => {
-                    println!("PointerBitmap");
+                RdpOutputEvent::PointerBitmap(pointer) => {
+                    debug!(width = ?pointer.width, height = ?pointer.height, "Received pointer bitmap");
+                    let bitmap_bytes = glib::Bytes::from_owned(pointer.bitmap_data.clone());
+                    let texture = gdk::MemoryTexture::new(
+                        pointer.width.into(),
+                        pointer.height.into(),
+                        gdk::MemoryFormat::R8g8b8a8,
+                        &bitmap_bytes,
+                        (pointer.width * 4).into());
+
+                    let cursor = gdk::Cursor::from_texture(
+                        &texture,
+                        pointer.hotspot_x.into(),
+                        pointer.hotspot_x.into(),
+                        None);
+                    self.obj().set_cursor(Some(&cursor));
                 }
             }
 
@@ -244,7 +262,7 @@ mod imp {
                                 let operation = ironrdp::input::Operation::MouseMove(
                                     ironrdp::input::MousePosition {
                                         x: x as u16,
-                                        y:y as u16 ,
+                                        y: y as u16,
                                     },
                                 );
                                 let input_events = imp

@@ -93,6 +93,7 @@
                 <property name="name">rdppage</property>
                 <property name="child">
                   <object class="IronRdpWidget" id="rdpwidget">
+                    <signal name="connection-failed" handler="handle_connection_failed" swapped="yes" />
                   </object>
                 </property>
               </object>

@@ -21,9 +21,11 @@
 use crate::rdpclient::{RdpInputEvent, RdpOutputEvent, start_rdp};
 use gtk::glib::prelude::*;
 use gtk::glib::{self, Properties};
+use gtk::glib::subclass::Signal;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, OnceCell, RefCell};
+use std::sync::OnceLock;
 use tracing::{debug, info};
 
 
@@ -117,6 +119,12 @@ mod imp {
                 RdpOutputEvent::Terminated(Err(reason)) => {
                     self.obj().set_state(RdpState::Disconnected);
                     println!("Error {}", reason);
+                }
+                RdpOutputEvent::ConnectionFailure(reason) => {
+                    self.obj().set_state(RdpState::Disconnected);
+                    let error_string = reason.to_string();
+                    self.obj().emit_by_name::<()>("connection-failed", &[&error_string]);
+                    println!("Connection error {}", reason);
                 }
                 RdpOutputEvent::Image {
                     buffer,
@@ -287,6 +295,15 @@ mod imp {
                 }
             ));
             self.obj().add_controller(event_controller);
+        }
+
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
+            SIGNALS.get_or_init(|| {
+                vec![Signal::builder("connection-failed")
+                    .param_types([String::static_type()])
+                    .build()]
+            })
         }
     }
 

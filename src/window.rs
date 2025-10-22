@@ -109,6 +109,13 @@ mod imp {
         fn handle_disconnectbutton_clicked(&self, _button: &gtk::Button) {
             self.rdpwidget.disconnect();
         }
+
+        #[template_callback]
+        fn handle_connection_failed(&self, reason: String) {
+            let dialog = adw::AlertDialog::new(Some("Connction error"), Some(&reason));
+            dialog.add_response("close", "Close");
+            dialog.present(Some(&*self.obj()));
+        }
     }
 
     #[glib::object_subclass]

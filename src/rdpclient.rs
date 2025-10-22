@@ -59,6 +59,7 @@ pub enum RdpOutputEvent {
     },
     PointerBitmap(Arc<DecodedPointer>),
     Terminated(SessionResult<GracefulDisconnectReason>),
+    ConnectionFailure(connector::ConnectorError),
 }
 
 enum RdpControlFlow {
@@ -95,7 +96,10 @@ impl RdpClient {
                     {
                         Ok(result) => result,
                         Err(e) => {
-                            println!("Failed to connect: {}", e);
+                            self.output_sender
+                                .send(RdpOutputEvent::ConnectionFailure(e))
+                                .await
+                                .expect("Channel broken");
                             continue;
                         }
                     };
@@ -124,7 +128,12 @@ impl RdpClient {
                 RdpInputEvent::FastPath(_) => {
                     warn!("Unexpected fast path");
                 }
-                RdpInputEvent::Resize { width: _, height: _, scale_factor: _, physical_size: _ } => {
+                RdpInputEvent::Resize {
+                    width: _,
+                    height: _,
+                    scale_factor: _,
+                    physical_size: _,
+                } => {
                     warn!("Unexpected resize");
                 }
             }

@@ -306,9 +306,9 @@ mod imp {
                                 }
                             },*/
                             let keycode: u16 = key_event.keycode().try_into().unwrap();
-                            let map = keycode::KeyMap::from_key_mapping(keycode::KeyMapping::Xkb(k
+                            let map = keycode::KeyMap::from_key_mapping(keycode::KeyMapping::Xkb(
                                 keycode,
-                            );
+                            ));
                             let scancode = match map {
                                 Ok(map) => map.win,
                                 Err(_) => {

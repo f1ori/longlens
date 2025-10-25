@@ -165,6 +165,19 @@ mod imp {
                 })
                 .sync_create()
                 .build();
+            self.rdpwidget.connect_state_notify(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |widget| {
+                    if widget.state() != RdpState::Connected { return };
+                    window
+                        .obj()
+                        .surface()
+                        .as_ref()
+                        .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
+                        .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
+                }
+            ));
         }
     }
     impl WidgetImpl for FernsichtRdpWindow {}

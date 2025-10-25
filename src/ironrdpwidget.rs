@@ -20,14 +20,13 @@
 
 use crate::rdpclient::{RdpInputEvent, RdpOutputEvent, start_rdp};
 use gtk::glib::prelude::*;
-use gtk::glib::{self, Properties};
 use gtk::glib::subclass::Signal;
+use gtk::glib::{self, Properties};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::sync::OnceLock;
-use tracing::{debug, info};
-
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
 #[enum_type(name = "RdpState")]
@@ -66,7 +65,7 @@ mod imp {
             username: String,
             password: String,
             width: u16,
-            height: u16
+            height: u16,
         ) {
             info!("widthxheight {} {}", width, height);
             self.obj().set_state(RdpState::Connecting);
@@ -123,7 +122,8 @@ mod imp {
                 RdpOutputEvent::ConnectionFailure(reason) => {
                     self.obj().set_state(RdpState::Disconnected);
                     let error_string = reason.to_string();
-                    self.obj().emit_by_name::<()>("connection-failed", &[&error_string]);
+                    self.obj()
+                        .emit_by_name::<()>("connection-failed", &[&error_string]);
                     println!("Connection error {}", reason);
                 }
                 RdpOutputEvent::Image {
@@ -160,18 +160,30 @@ mod imp {
                         pointer.height.into(),
                         gdk::MemoryFormat::R8g8b8a8,
                         &bitmap_bytes,
-                        (pointer.width * 4).into());
+                        (pointer.width * 4).into(),
+                    );
 
                     let cursor = gdk::Cursor::from_texture(
                         &texture,
                         pointer.hotspot_x.into(),
                         pointer.hotspot_x.into(),
-                        None);
+                        None,
+                    );
                     self.obj().set_cursor(Some(&cursor));
                 }
             }
 
             glib::ControlFlow::Continue
+        }
+
+        fn send_input_operation(&self, operation: ironrdp::input::Operation) {
+            let input_events = self
+                .input_database
+                .get()
+                .unwrap()
+                .borrow_mut()
+                .apply(core::iter::once(operation));
+            self.send_fast_path_events(input_events);
         }
 
         fn send_fast_path_events(
@@ -235,20 +247,14 @@ mod imp {
                     if imp.state.get() != RdpState::Connected {
                         return;
                     }
-                    let operation = ironrdp::input::Operation::MouseMove(
-                        ironrdp::input::MousePosition {
+                    let operation =
+                        ironrdp::input::Operation::MouseMove(ironrdp::input::MousePosition {
                             x: x as u16,
                             y: y as u16,
-                        },
-                    );
-                    let input_events = imp
-                        .input_database
-                        .get()
-                        .unwrap()
-                        .borrow_mut()
-                        .apply(core::iter::once(operation));
-                    imp.send_fast_path_events(input_events);
-            }));
+                        });
+                    imp.send_input_operation(operation);
+                }
+            ));
             self.obj().add_controller(event_controller_motion);
 
             let event_controller = gtk::EventControllerLegacy::new();
@@ -281,13 +287,48 @@ mod imp {
                                     return glib::Propagation::Proceed;
                                 }
                             };
-                            let input_events = imp
-                                .input_database
-                                .get()
-                                .unwrap()
-                                .borrow_mut()
-                                .apply(core::iter::once(operation));
-                            imp.send_fast_path_events(input_events);
+                            imp.send_input_operation(operation);
+                            glib::Propagation::Stop
+                        }
+                        gdk::EventType::KeyPress | gdk::EventType::KeyRelease => {
+                            let key_event = event.clone().downcast::<gdk::KeyEvent>().unwrap();
+                            println!("keycode {}", key_event.keycode());
+                            /*let operation = match key_event.keyval().to_unicode() {
+                            Some(unicode) => match event.event_type() {
+                                gdk::EventType::KeyPress => {
+                                    ironrdp::input::Operation::UnicodeKeyPressed(unicode)
+                                }
+                                gdk::EventType::KeyRelease => {
+                                    ironrdp::input::Operation::UnicodeKeyReleased(unicode)
+                                }
+                                _ => {
+                                    return glib::Propagation::Proceed;
+                                }
+                            },*/
+                            let keycode: u16 = key_event.keycode().try_into().unwrap();
+                            let map = keycode::KeyMap::from_key_mapping(keycode::KeyMapping::Xkb(k
+                                keycode,
+                            );
+                            let scancode = match map {
+                                Ok(map) => map.win,
+                                Err(_) => {
+                                    warn!("Known keycode {}", keycode);
+                                    return glib::Propagation::Proceed;
+                                }
+                            };
+                            let scancode = ironrdp::input::Scancode::from_u16(scancode);
+                            let operation = match event.event_type() {
+                                gdk::EventType::KeyPress => {
+                                    ironrdp::input::Operation::KeyPressed(scancode)
+                                }
+                                gdk::EventType::KeyRelease => {
+                                    ironrdp::input::Operation::KeyReleased(scancode)
+                                }
+                                _ => {
+                                    return glib::Propagation::Proceed;
+                                }
+                            };
+                            imp.send_input_operation(operation);
                             glib::Propagation::Stop
                         }
                         _ => glib::Propagation::Proceed,
@@ -295,14 +336,17 @@ mod imp {
                 }
             ));
             self.obj().add_controller(event_controller);
+            self.obj().set_focusable(true);
         }
 
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| {
-                vec![Signal::builder("connection-failed")
-                    .param_types([String::static_type()])
-                    .build()]
+                vec![
+                    Signal::builder("connection-failed")
+                        .param_types([String::static_type()])
+                        .build(),
+                ]
             })
         }
     }
@@ -346,7 +390,7 @@ impl IronRdpWidget {
         username: String,
         password: String,
         width: u16,
-        height: u16
+        height: u16,
     ) {
         self.imp()
             .connect_to_server(hostname, port, username, password, width, height);

@@ -44,7 +44,7 @@ mod imp {
     }
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(resource = "/de/f1ori/fernsichtrdp/window.ui")]
+    #[template(resource = "/de/f1ori/fernsichtrdp/ui/window.ui")]
     pub struct FernsichtRdpWindow {
         // Template widgets
         #[template_child]

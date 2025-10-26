@@ -43,4 +43,13 @@ configure_file(
   install_dir: get_option('datadir') / 'dbus-1' / 'services'
 )
 
+pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
+
+gnome.compile_resources('fernsicht-rdp',
+  'de.f1ori.fernsichtrdp.gresource.xml',
+  gresource_bundle: true,
+  install: true,
+  install_dir: pkgdatadir,
+)
+
 subdir('icons')

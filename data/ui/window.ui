@@ -37,7 +37,7 @@
                 <property name="name">destinationspage</property>
                 <property name="child">
                   <object class="AdwClamp">
-                    <property name="maximum-size">300</property>
+                    <property name="maximum-size">400</property>
                     <child>
                       <object class="AdwPreferencesPage">
                         <child>
@@ -111,10 +111,6 @@
       <item>
         <attribute name="action">app.preferences</attribute>
         <attribute name="label" translatable="yes">_Preferences</attribute>
-      </item>
-      <item>
-        <attribute name="action">app.shortcuts</attribute>
-        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
       </item>
       <item>
         <attribute name="action">app.about</attribute>

@@ -1,0 +1,100 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $FernsichtRdpWindow: Adw.ApplicationWindow {
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      Button disconnectbutton {
+        icon-name: "application-exit-symbolic-rtl";
+        tooltip-text: _("Disconnect");
+        visible: false;
+        clicked => $handle_disconnectbutton_clicked() swapped;
+      }
+
+      [end]
+      MenuButton {
+        icon-name: "open-menu-symbolic";
+        menu-model: primary_menu;
+        primary: true;
+        tooltip-text: _("Main Menu");
+      }
+    }
+
+    Stack stack {
+      transition-type: slide_left_right;
+
+      StackPage {
+        name: "destinationspage";
+
+        child: Adw.Clamp {
+          maximum-size: 400;
+
+          Adw.PreferencesPage {
+            Adw.PreferencesGroup {
+              title: "Connect to RDP host:";
+
+              Adw.EntryRow hostnameentry {
+                title: "Hostname";
+                entry-activated => $handle_entries_activated() swapped;
+              }
+
+              Adw.EntryRow usernameentry {
+                title: "Username";
+                entry-activated => $handle_entries_activated() swapped;
+              }
+
+              Adw.PasswordEntryRow passwordentry {
+                title: "Password";
+                entry-activated => $handle_entries_activated() swapped;
+              }
+
+              Adw.ButtonRow connectbutton {
+                title: "Connect";
+                activated => $handle_connectbutton_activated() swapped;
+              }
+            }
+
+            Adw.PreferencesGroup {
+              title: "Recently used:";
+
+              ListBox destinations_list {
+                row-activated => $handle_destinationslist_rowactivated() swapped;
+
+                styles [
+                  "boxed-list",
+                ]
+              }
+            }
+          }
+        };
+      }
+
+      StackPage rdppage {
+        name: "rdppage";
+
+        child: $IronRdpWidget rdpwidget {
+          connection-failed => $handle_connection_failed() swapped;
+        };
+      }
+    }
+  };
+
+  default-height: 600;
+  default-width: 800;
+  title: _("Fernsicht RDP");
+}
+
+menu primary_menu {
+  section {
+    item {
+      action: "app.preferences";
+      label: _("_Preferences");
+    }
+
+    item {
+      action: "app.about";
+      label: _("_About FernsichtRdp");
+    }
+  }
+}

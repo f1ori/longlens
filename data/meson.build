@@ -45,11 +45,20 @@ configure_file(
 
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 
+blueprints = custom_target('blueprints',
+  input: files(
+    'ui/window.blp',
+  ),
+  output: '.',
+  command: [find_program('blueprint-compiler'), 'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'],
+)
+
 gnome.compile_resources('fernsicht-rdp',
   'de.f1ori.fernsichtrdp.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,
+  dependencies: blueprints,
 )
 
 subdir('icons')

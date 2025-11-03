@@ -47,6 +47,7 @@ pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 
 blueprints = custom_target('blueprints',
   input: files(
+    'ui/destinations_page.blp',
     'ui/window.blp',
   ),
   output: '.',

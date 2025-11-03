@@ -2,6 +2,10 @@ using Gtk 4.0;
 using Adw 1;
 
 template $FernsichtRdpWindow: Adw.ApplicationWindow {
+  default-height: 600;
+  default-width: 800;
+  title: _("Fernsicht RDP");
+
   content: Adw.ToolbarView {
     [top]
     Adw.HeaderBar {
@@ -27,46 +31,8 @@ template $FernsichtRdpWindow: Adw.ApplicationWindow {
       StackPage {
         name: "destinationspage";
 
-        child: Adw.Clamp {
-          maximum-size: 400;
-
-          Adw.PreferencesPage {
-            Adw.PreferencesGroup {
-              title: "Connect to RDP host:";
-
-              Adw.EntryRow hostnameentry {
-                title: "Hostname";
-                entry-activated => $handle_entries_activated() swapped;
-              }
-
-              Adw.EntryRow usernameentry {
-                title: "Username";
-                entry-activated => $handle_entries_activated() swapped;
-              }
-
-              Adw.PasswordEntryRow passwordentry {
-                title: "Password";
-                entry-activated => $handle_entries_activated() swapped;
-              }
-
-              Adw.ButtonRow connectbutton {
-                title: "Connect";
-                activated => $handle_connectbutton_activated() swapped;
-              }
-            }
-
-            Adw.PreferencesGroup {
-              title: "Recently used:";
-
-              ListBox destinations_list {
-                row-activated => $handle_destinationslist_rowactivated() swapped;
-
-                styles [
-                  "boxed-list",
-                ]
-              }
-            }
-          }
+        child: $FsrdpDestinationsPage destinations_page {
+          //rdpwidget: rdpwidget;
         };
       }
 
@@ -79,10 +45,6 @@ template $FernsichtRdpWindow: Adw.ApplicationWindow {
       }
     }
   };
-
-  default-height: 600;
-  default-width: 800;
-  title: _("Fernsicht RDP");
 }
 
 menu primary_menu {

@@ -331,7 +331,7 @@ impl RdpClient {
             desktop_scale_factor: 0, // Default to 0 per FreeRDP
             bitmap: Some(bitmap),
             client_build: 42,
-            client_name: String::from("fernsichtrdp"),
+            client_name: String::from("longlens"),
             // NOTE: hardcode this value like in freerdp
             // https://github.com/FreeRDP/FreeRDP/blob/4e24b966c86fdf494a782f0dfcfc43a057a2ea60/libfreerdp/core/settings.c#LL49C34-L49C70
             client_dir: "C:\\Windows\\System32\\mstscax.dll".to_owned(),

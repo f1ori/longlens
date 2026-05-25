@@ -1,12 +1,12 @@
 {
-    "id" : "de.f1ori.fernsichtrdp",
+    "id" : "de.f1ori.longlens",
     "runtime" : "org.gnome.Platform",
     "runtime-version" : "49",
     "sdk" : "org.gnome.Sdk",
     "sdk-extensions" : [
         "org.freedesktop.Sdk.Extension.rust-stable"
     ],
-    "command" : "fernsicht-rdp",
+    "command" : "longlens",
     "finish-args" : [
         "--share=network",
         "--share=ipc",
@@ -21,7 +21,7 @@
         ],
         "env" : {
             "RUST_BACKTRACE" : "1",
-            "RUST_LOG" : "fernsicht-rdp=debug"
+            "RUST_LOG" : "longlens=debug"
         }
     },
     "cleanup" : [
@@ -37,7 +37,7 @@
     ],
     "modules" : [
         {
-            "name" : "fernsicht-rdp",
+            "name" : "longlens",
             "builddir" : true,
             "buildsystem" : "meson",
             "sources" : [

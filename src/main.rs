@@ -27,8 +27,8 @@ mod rdpclient;
 mod window;
 mod utils;
 
-use self::application::FernsichtRdpApplication;
-use self::window::FernsichtRdpWindow;
+use self::application::LongLensApplication;
+use self::window::LongLensWindow;
 
 use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
@@ -37,7 +37,7 @@ use gtk::{gio, glib};
 use tracing_subscriber;
 
 
-const APP_ID: &str = "de.f1ori.fernsichtrdp";
+const APP_ID: &str = "de.f1ori.longlens";
 
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()
@@ -52,7 +52,7 @@ fn main() -> glib::ExitCode {
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
     // Load resources
-    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/fernsicht-rdp.gresource")
+    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/longlens.gresource")
         .expect("Could not load resources");
     gio::resources_register(&resources);
 
@@ -60,7 +60,7 @@ fn main() -> glib::ExitCode {
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
     let app =
-        FernsichtRdpApplication::new(APP_ID, &gio::ApplicationFlags::empty());
+        LongLensApplication::new(APP_ID, &gio::ApplicationFlags::empty());
 
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This

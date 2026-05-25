@@ -1,10 +1,10 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $FernsichtRdpWindow: Adw.ApplicationWindow {
+template $LongLensWindow: Adw.ApplicationWindow {
   default-height: 600;
   default-width: 800;
-  title: _("Fernsicht RDP");
+  title: _("Long Lens");
 
   content: Adw.ToolbarView {
     [top]
@@ -56,7 +56,7 @@ menu primary_menu {
 
     item {
       action: "app.about";
-      label: _("_About FernsichtRdp");
+      label: _("_About Long Lens");
     }
   }
 }

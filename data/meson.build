@@ -1,6 +1,6 @@
 desktop_file = i18n.merge_file(
-        input: 'de.f1ori.fernsichtrdp.desktop.in',
-       output: 'de.f1ori.fernsichtrdp.desktop',
+        input: 'de.f1ori.longlens.desktop.in',
+       output: 'de.f1ori.longlens.desktop',
          type: 'desktop',
        po_dir: '../po',
       install: true,
@@ -13,8 +13,8 @@ if desktop_utils.found()
 endif
 
 appstream_file = i18n.merge_file(
-        input: 'de.f1ori.fernsichtrdp.metainfo.xml.in',
-       output: 'de.f1ori.fernsichtrdp.metainfo.xml',
+        input: 'de.f1ori.longlens.metainfo.xml.in',
+       output: 'de.f1ori.longlens.metainfo.xml',
        po_dir: '../po',
       install: true,
   install_dir: get_option('datadir') / 'metainfo'
@@ -24,7 +24,7 @@ appstreamcli = find_program('appstreamcli', required: false, disabler: true)
 test('Validate appstream file', appstreamcli,
      args: ['validate', '--no-net', '--explain', appstream_file])
 
-install_data('de.f1ori.fernsichtrdp.gschema.xml',
+install_data('de.f1ori.longlens.gschema.xml',
   install_dir: get_option('datadir') / 'glib-2.0' / 'schemas'
 )
 
@@ -37,8 +37,8 @@ test('Validate schema file',
 service_conf = configuration_data()
 service_conf.set('bindir', get_option('prefix') / get_option('bindir'))
 configure_file(
-  input: 'de.f1ori.fernsichtrdp.service.in',
-  output: 'de.f1ori.fernsichtrdp.service',
+  input: 'de.f1ori.longlens.service.in',
+  output: 'de.f1ori.longlens.service',
   configuration: service_conf,
   install_dir: get_option('datadir') / 'dbus-1' / 'services'
 )
@@ -54,8 +54,8 @@ blueprints = custom_target('blueprints',
   command: [find_program('blueprint-compiler'), 'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'],
 )
 
-gnome.compile_resources('fernsicht-rdp',
-  'de.f1ori.fernsichtrdp.gresource.xml',
+gnome.compile_resources('longlens',
+  'de.f1ori.longlens.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,

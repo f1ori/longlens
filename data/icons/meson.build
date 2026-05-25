@@ -1,4 +1,4 @@
-application_id = 'de.f1ori.fernsichtrdp'
+application_id = 'de.f1ori.longlens'
 
 scalable_dir = 'hicolor' / 'scalable' / 'apps'
 install_data(

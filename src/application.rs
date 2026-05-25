@@ -24,22 +24,22 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::config::VERSION;
-use crate::FernsichtRdpWindow;
+use crate::LongLensWindow;
 
 mod imp {
     use super::*;
 
     #[derive(Debug, Default)]
-    pub struct FernsichtRdpApplication {}
+    pub struct LongLensApplication {}
 
     #[glib::object_subclass]
-    impl ObjectSubclass for FernsichtRdpApplication {
-        const NAME: &'static str = "FernsichtRdpApplication";
-        type Type = super::FernsichtRdpApplication;
+    impl ObjectSubclass for LongLensApplication {
+        const NAME: &'static str = "LongLensApplication";
+        type Type = super::LongLensApplication;
         type ParentType = adw::Application;
     }
 
-    impl ObjectImpl for FernsichtRdpApplication {
+    impl ObjectImpl for LongLensApplication {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
@@ -47,7 +47,7 @@ mod imp {
         }
     }
 
-    impl ApplicationImpl for FernsichtRdpApplication {
+    impl ApplicationImpl for LongLensApplication {
         // We connect to the activate callback to create a window when the application
         // has been launched. Additionally, this callback notifies us when the user
         // tries to launch a "second instance" of the application. When they try
@@ -56,7 +56,7 @@ mod imp {
             let application = self.obj();
             // Get the current window or create one if necessary
             let window = application.active_window().unwrap_or_else(|| {
-                let window = FernsichtRdpWindow::new(&*application);
+                let window = LongLensWindow::new(&*application);
                 window.upcast()
             });
 
@@ -65,22 +65,22 @@ mod imp {
         }
     }
 
-    impl GtkApplicationImpl for FernsichtRdpApplication {}
-    impl AdwApplicationImpl for FernsichtRdpApplication {}
+    impl GtkApplicationImpl for LongLensApplication {}
+    impl AdwApplicationImpl for LongLensApplication {}
 }
 
 glib::wrapper! {
-    pub struct FernsichtRdpApplication(ObjectSubclass<imp::FernsichtRdpApplication>)
+    pub struct LongLensApplication(ObjectSubclass<imp::LongLensApplication>)
         @extends gio::Application, gtk::Application, adw::Application,
         @implements gio::ActionGroup, gio::ActionMap;
 }
 
-impl FernsichtRdpApplication {
+impl LongLensApplication {
     pub fn new(application_id: &str, flags: &gio::ApplicationFlags) -> Self {
         glib::Object::builder()
             .property("application-id", application_id)
             .property("flags", flags)
-            .property("resource-base-path", "/de/f1ori/fernsichtrdp")
+            .property("resource-base-path", "/de/f1ori/longlens")
             .build()
     }
 
@@ -97,14 +97,14 @@ impl FernsichtRdpApplication {
     fn show_about(&self) {
         let window = self.active_window().unwrap();
         let about = adw::AboutDialog::builder()
-            .application_name("fernsicht-rdp")
-            .application_icon("de.f1ori.fernsichtrdp")
+            .application_name("Long Lens")
+            .application_icon("de.f1ori.longlens")
             .developer_name("Florian Richter")
             .version(VERSION)
             .developers(vec!["Florian Richter"])
             // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
             .translator_credits(&gettext("translator-credits"))
-            .copyright("© 2025 Florian Richter")
+            .copyright("© 2026 Florian Richter")
             .build();
 
         about.present(Some(&window));

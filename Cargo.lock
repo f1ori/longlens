@@ -910,34 +910,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "fernsicht-rdp"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "gdk4",
- "gettext-rs",
- "gtk4",
- "ironrdp",
- "ironrdp-core",
- "ironrdp-tls",
- "ironrdp-tokio",
- "keycode",
- "libadwaita",
- "semver",
- "serde",
- "serde_json",
- "smallvec",
- "softbuffer",
- "tap",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "whoami",
-]
-
-[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2271,6 +2243,34 @@ name = "log"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+
+[[package]]
+name = "longlens"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gdk4",
+ "gettext-rs",
+ "gtk4",
+ "ironrdp",
+ "ironrdp-core",
+ "ironrdp-tls",
+ "ironrdp-tokio",
+ "keycode",
+ "libadwaita",
+ "semver",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "softbuffer",
+ "tap",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "whoami",
+]
 
 [[package]]
 name = "lru-cache"

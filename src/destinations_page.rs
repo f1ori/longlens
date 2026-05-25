@@ -45,7 +45,7 @@ mod imp {
 
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(resource = "/de/f1ori/fernsichtrdp/ui/destinations_page.ui")]
+    #[template(resource = "/de/f1ori/longlens/ui/destinations_page.ui")]
     pub struct FsrdpDestinationsPage {
         // Template widgets
         #[template_child]

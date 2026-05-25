@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=de.f1ori.longlens
+Exec=@bindir@/longlens --gapplication-service

@@ -26,7 +26,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for DestinationObject {
-        const NAME: &'static str = "FernsichtRdpDestinationObject";
+        const NAME: &'static str = "LongLensDestinationObject";
         type Type = super::DestinationObject;
     }
 

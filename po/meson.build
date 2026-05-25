@@ -1,1 +1,1 @@
-i18n.gettext('fernsicht-rdp', preset: 'glib')
+i18n.gettext('longlens', preset: 'glib')

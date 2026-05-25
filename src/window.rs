@@ -29,8 +29,8 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(resource = "/de/f1ori/fernsichtrdp/ui/window.ui")]
-    pub struct FernsichtRdpWindow {
+    #[template(resource = "/de/f1ori/longlens/ui/window.ui")]
+    pub struct LongLensWindow {
         // Template widgets
         #[template_child]
         pub stack: TemplateChild<gtk::Stack>,
@@ -42,7 +42,7 @@ mod imp {
         pub rdpwidget: TemplateChild<IronRdpWidget>,
     }
     #[gtk::template_callbacks]
-    impl FernsichtRdpWindow {
+    impl LongLensWindow {
         #[template_callback]
         fn handle_disconnectbutton_clicked(&self, _button: &gtk::Button) {
             self.rdpwidget.disconnect();
@@ -57,9 +57,9 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for FernsichtRdpWindow {
-        const NAME: &'static str = "FernsichtRdpWindow";
-        type Type = super::FernsichtRdpWindow;
+    impl ObjectSubclass for LongLensWindow {
+        const NAME: &'static str = "LongLensWindow";
+        type Type = super::LongLensWindow;
         type ParentType = adw::ApplicationWindow;
 
         fn class_init(klass: &mut Self::Class) {
@@ -72,7 +72,7 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for FernsichtRdpWindow {
+    impl ObjectImpl for LongLensWindow {
         fn constructed(&self) {
             self.parent_constructed();
             // bind page to connection state
@@ -104,19 +104,19 @@ mod imp {
             self.obj().setup_actions();
         }
     }
-    impl WidgetImpl for FernsichtRdpWindow {}
-    impl WindowImpl for FernsichtRdpWindow {}
-    impl ApplicationWindowImpl for FernsichtRdpWindow {}
-    impl AdwApplicationWindowImpl for FernsichtRdpWindow {}
+    impl WidgetImpl for LongLensWindow {}
+    impl WindowImpl for LongLensWindow {}
+    impl ApplicationWindowImpl for LongLensWindow {}
+    impl AdwApplicationWindowImpl for LongLensWindow {}
 }
 
 glib::wrapper! {
-    pub struct FernsichtRdpWindow(ObjectSubclass<imp::FernsichtRdpWindow>)
+    pub struct LongLensWindow(ObjectSubclass<imp::LongLensWindow>)
         @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
         @implements gio::ActionGroup, gio::ActionMap, gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
 }
 
-impl FernsichtRdpWindow {
+impl LongLensWindow {
     pub fn new<P: IsA<gtk::Application>>(application: &P) -> Self {
         glib::Object::builder()
             .property("application", application)

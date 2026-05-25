@@ -1,4 +1,6 @@
 target/
 _build/
+builddir/
 .flatpak/
 .vscode/
+src/config.rs

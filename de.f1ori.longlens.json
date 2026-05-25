@@ -42,8 +42,8 @@
             "buildsystem" : "meson",
             "sources" : [
                 {
-                    "type" : "git",
-                    "url" : "file:///var/home/flori/Projects"
+                    "type" : "dir",
+                    "path" : "."
                 }
             ]
         }

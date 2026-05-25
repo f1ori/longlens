@@ -2,6 +2,7 @@ use std::cell::{Cell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gtk::gio;
 use gtk::glib;
 
 mod imp {
@@ -19,7 +20,7 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
-        pub savebutton: TemplateChild<gtk::Button>,
+        pub savebutton: TemplateChild<adw::SplitButton>,
         #[template_child]
         pub deletebutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
@@ -72,8 +73,22 @@ mod imp {
         }
 
         #[template_callback]
-        fn handle_savebutton_clicked(&self, _button: &gtk::Button) {
+        fn handle_savebutton_clicked(&self, _button: &adw::SplitButton) {
             self.handle_action();
+        }
+
+        fn save_only(&self) {
+            let name = self.nameentry.text().to_string();
+            let hostname = self.hostnameentry.text().to_string();
+            let username = self.usernameentry.text().to_string();
+            if self.is_edit_mode.get() {
+                if let Some(on_save) = self.on_save.borrow().as_ref() {
+                    on_save(name, hostname, username);
+                }
+            } else if let Some(on_connect) = self.on_connect.borrow().as_ref() {
+                on_connect(name, hostname, username);
+            }
+            self.obj().close();
         }
 
         fn handle_action(&self) {
@@ -84,10 +99,8 @@ mod imp {
                 if let Some(on_save) = self.on_save.borrow().as_ref() {
                     on_save(name, hostname, username);
                 }
-                self.obj().close();
-            } else {
-                self.connect_rdp();
             }
+            self.connect_rdp();
         }
 
         fn connect_rdp(&self) {
@@ -124,6 +137,14 @@ mod imp {
     impl ObjectImpl for LongLensDestinationDialog {
         fn constructed(&self) {
             self.parent_constructed();
+
+            let action_group = gio::SimpleActionGroup::new();
+            let save_only = gio::SimpleAction::new("save-only", None);
+            let obj = self.obj().clone();
+            save_only.connect_activate(move |_, _| obj.imp().save_only());
+            action_group.add_action(&save_only);
+            self.obj().insert_action_group("dialog", Some(&action_group));
+
             self.obj().connect_map(|dialog| {
                 dialog.imp().hostnameentry.grab_focus();
             });
@@ -147,11 +168,9 @@ impl LongLensDestinationDialog {
     pub fn set_edit_mode(&self, edit_mode: bool) {
         self.imp().is_edit_mode.set(edit_mode);
         if edit_mode {
-            self.imp().savebutton.set_label("Save");
             self.set_title("Edit Destination");
             self.imp().deletebutton.set_visible(true);
         } else {
-            self.imp().savebutton.set_label("Connect");
             self.set_title("Add Destination");
             self.imp().deletebutton.set_visible(false);
         }

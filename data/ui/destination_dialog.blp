@@ -3,7 +3,7 @@ using Adw 1;
 
 template $LongLensDestinationDialog: Adw.Dialog {
   title: _("Add Destination");
-  content-width: 360;
+  content-width: 400;
 
   Adw.ToolbarView {
     [top]
@@ -25,10 +25,11 @@ template $LongLensDestinationDialog: Adw.Dialog {
       }
 
       [end]
-      Button savebutton {
-        label: _("Save");
+      Adw.SplitButton savebutton {
+        label: _("Save & Connect");
         clicked => $handle_savebutton_clicked() swapped;
         styles ["suggested-action"]
+        menu-model: save_menu;
       }
     }
 
@@ -55,5 +56,12 @@ template $LongLensDestinationDialog: Adw.Dialog {
         }
       }
     }
+  }
+}
+
+menu save_menu {
+  item {
+    label: _("Save");
+    action: "dialog.save-only";
   }
 }

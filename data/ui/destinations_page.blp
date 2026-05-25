@@ -8,47 +8,7 @@ template $FsrdpDestinationsPage: Adw.Bin {
 
     Adw.PreferencesPage {
       Adw.PreferencesGroup {
-        title: _("Connect to RDP host:");
-
-        [header-suffix]
-        Button {
-            icon-name: "star-new-symbolic";
-            tooltip-text: _("Add to favorites");
-            //clicked => $handle_add_to_favorites_clicked() swapped;
-            styles ['flat']
-        }
-
-        Adw.EntryRow hostnameentry {
-          title: _("Hostname");
-          entry-activated => $handle_entries_activated() swapped;
-        }
-
-        Adw.EntryRow usernameentry {
-          title: _("Username");
-          entry-activated => $handle_entries_activated() swapped;
-        }
-
-        Adw.PasswordEntryRow passwordentry {
-          title: _("Password");
-          entry-activated => $handle_entries_activated() swapped;
-        }
-
-        Adw.ButtonRow connectbutton {
-          title: _("Connect");
-          activated => $handle_connectbutton_activated() swapped;
-        }
-      }
-
-      Adw.PreferencesGroup {
         title: _("Favorites:");
-
-        [header-suffix]
-        Button {
-            icon-name: "list-add-symbolic";
-            tooltip-text: _("Create new favorite");
-            //clicked => $handle_add_favorite() swapped;
-            styles ['flat']
-        }
 
         ListBox destinations_list {
           row-activated => $handle_destinationslist_rowactivated() swapped;

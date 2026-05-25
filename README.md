@@ -8,7 +8,7 @@ The easiest thing to use is GNOME Builder.
 
 ### VSCode and devcontainer
 
-    meson setup builddir --reconfigure --prefix=/workspaces/longlens/builddir/install
+    meson setup builddir --prefix=/workspaces/longlens/builddir/install
     meson compile -C builddir
     meson install -C builddir
     ./builddir/install/bin/longlens

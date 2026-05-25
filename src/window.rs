@@ -31,13 +31,14 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/window.ui")]
     pub struct LongLensWindow {
-        // Template widgets
         #[template_child]
         pub stack: TemplateChild<gtk::Stack>,
         #[template_child]
         pub destinations_page: TemplateChild<FsrdpDestinationsPage>,
         #[template_child]
         pub disconnectbutton: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub adddestinationbutton: TemplateChild<gtk::Button>,
         #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
     }
@@ -46,6 +47,11 @@ mod imp {
         #[template_callback]
         fn handle_disconnectbutton_clicked(&self, _button: &gtk::Button) {
             self.rdpwidget.disconnect();
+        }
+
+        #[template_callback]
+        fn handle_adddestinationbutton_clicked(&self, _button: &gtk::Button) {
+            self.destinations_page.show_add_dialog();
         }
 
         #[template_callback]

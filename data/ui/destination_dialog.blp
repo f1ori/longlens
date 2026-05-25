@@ -1,0 +1,50 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LongLensDestinationDialog: Adw.Dialog {
+  title: _("Add Destination");
+  content-width: 360;
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-end-title-buttons: false;
+      [start]
+      Button {
+        label: _("Cancel");
+        clicked => $handle_cancelbutton_clicked() swapped;
+      }
+
+      [end]
+      Button savebutton {
+        label: _("Save");
+        clicked => $handle_savebutton_clicked() swapped;
+        styles ["suggested-action"]
+      }
+    }
+
+    Adw.PreferencesPage {
+      Adw.PreferencesGroup {
+        Adw.EntryRow nameentry {
+          title: _("Name");
+          entry-activated => $handle_entries_activated() swapped;
+        }
+
+        Adw.EntryRow hostnameentry {
+          title: _("Hostname");
+          entry-activated => $handle_entries_activated() swapped;
+        }
+
+        Adw.EntryRow usernameentry {
+          title: _("Username");
+          entry-activated => $handle_entries_activated() swapped;
+        }
+
+        Adw.PasswordEntryRow passwordentry {
+          title: _("Password");
+          entry-activated => $handle_entries_activated() swapped;
+        }
+      }
+    }
+  }
+}

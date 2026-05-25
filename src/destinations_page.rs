@@ -24,12 +24,12 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use crate::destination_dialog::LongLensDestinationDialog;
 use crate::destination_object::{DestinationData, DestinationObject};
 use crate::utils::data_path;
 
 
 fn parse_domain_port(input: &str) -> (String, u16) {
-    // Split on the first colon
     let mut parts = input.splitn(2, ':');
     let domain = parts.next().unwrap_or("").to_string();
     let port = parts
@@ -47,38 +47,13 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destinations_page.ui")]
     pub struct FsrdpDestinationsPage {
-        // Template widgets
-        #[template_child]
-        pub hostnameentry: TemplateChild<adw::EntryRow>,
-        #[template_child]
-        pub usernameentry: TemplateChild<adw::EntryRow>,
-        #[template_child]
-        pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
         pub destinations_list: TemplateChild<gtk::ListBox>,
         pub destinations: OnceCell<gio::ListStore>,
+        pub dialog: OnceCell<LongLensDestinationDialog>,
     }
     #[gtk::template_callbacks]
     impl FsrdpDestinationsPage {
-        #[template_callback]
-        fn handle_entries_activated(&self, _entry: &adw::EntryRow) {
-            self.connect();
-        }
-
-        #[template_callback]
-        fn handle_connectbutton_activated(&self, _button: &adw::ButtonRow) {
-            self.connect();
-        }
-
-        fn connect(&self) {
-            self.obj().activate_action("win.quick-connect", None).expect("Quick connect action failed");
-
-            //let width = self.stack.width() as u16;
-            //let height = self.stack.height() as u16;
-            //self.rdpwidget
-            //    .connect_to_server(domain, port, username, password, width, height);
-        }
-
         #[template_callback]
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
             let index = row.index();
@@ -89,9 +64,11 @@ mod imp {
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
                 .expect("The object needs to be a `DestinationObject`.");
-            self.hostnameentry.set_text(&destination.hostname());
-            self.usernameentry.set_text(&destination.username());
-            self.passwordentry.grab_focus();
+            let dialog = self.dialog.get().expect("Dialog should be initialized");
+            dialog.imp().hostnameentry.set_text(&destination.hostname());
+            dialog.imp().usernameentry.set_text(&destination.username());
+            dialog.present(Some(&*self.obj()));
+            dialog.imp().passwordentry.grab_focus();
         }
 
         #[template_callback]
@@ -123,6 +100,9 @@ mod imp {
             self.parent_constructed();
             self.obj().setup_destinations();
             self.obj().load_destinations();
+            self.dialog
+                .set(LongLensDestinationDialog::new())
+                .expect("Could not set dialog");
         }
     }
     impl WidgetImpl for FsrdpDestinationsPage {}
@@ -180,7 +160,7 @@ impl FsrdpDestinationsPage {
         }
     }
 
-    pub fn add_destination(&self, hostname: String, username: String) {
+    pub fn add_destination(&self, name: String, hostname: String, username: String) {
         let found = self
             .destinations()
             .iter::<DestinationObject>()
@@ -188,7 +168,7 @@ impl FsrdpDestinationsPage {
             .map(|destination_object| destination_object.destination_data())
             .find(|o| o.hostname == hostname && o.username == username);
         if found.is_none() {
-            let destination = DestinationObject::new(hostname, username);
+            let destination = DestinationObject::new(name, hostname, username);
             self.destinations().append(&destination);
         }
     }
@@ -223,14 +203,56 @@ impl FsrdpDestinationsPage {
             })
             .sync_create()
             .build();
+
+        let edit_button = gtk::Button::builder()
+            .icon_name("document-edit-symbolic")
+            .valign(gtk::Align::Center)
+            .build();
+        edit_button.add_css_class("flat");
+
+        edit_button.connect_clicked(glib::clone!(
+            #[weak]
+            destination_object,
+            #[weak(rename_to = page)]
+            self,
+            move |_button| {
+                let dialog = LongLensDestinationDialog::new();
+                dialog.imp().nameentry.set_text(&destination_object.name());
+                dialog.imp().hostnameentry.set_text(&destination_object.hostname());
+                dialog.imp().usernameentry.set_text(&destination_object.username());
+                dialog.set_edit_mode(true);
+                dialog.set_on_save(glib::clone!(
+                    #[weak]
+                    destination_object,
+                    #[weak]
+                    page,
+                    move |name, hostname, username| {
+                        destination_object.set_name(name);
+                        destination_object.set_hostname(hostname);
+                        destination_object.set_username(username);
+                        page.save_destinations();
+                    }
+                ));
+                dialog.present(Some(&page));
+            }
+        ));
+
+        row.add_suffix(&edit_button);
         row
     }
 
+    pub fn show_add_dialog(&self) {
+        let dialog = self.imp().dialog.get().expect("Dialog should be initialized");
+        dialog.present(Some(self));
+    }
+
     pub fn get_quick_connect_data(&self) -> (String, u16, String, String) {
-        let hostname = self.imp().hostnameentry.text().to_string();
-        let username = self.imp().usernameentry.text().to_string();
-        let password = self.imp().passwordentry.text().to_string();
-        self.add_destination(hostname.clone(), username.clone());
+        let dialog = self.imp().dialog.get().expect("Dialog should be initialized");
+        let name = dialog.name();
+        let hostname = dialog.hostname();
+        let username = dialog.username();
+        let password = dialog.password();
+        self.add_destination(name, hostname.clone(), username.clone());
         self.save_destinations();
 
         let (domain, port) = parse_domain_port(&hostname);

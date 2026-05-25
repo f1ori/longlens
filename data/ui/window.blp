@@ -16,6 +16,11 @@ template $LongLensWindow: Adw.ApplicationWindow {
         clicked => $handle_disconnectbutton_clicked() swapped;
       }
 
+      Button adddestinationbutton {
+        label: _("Add destination");
+        clicked => $handle_adddestinationbutton_clicked() swapped;
+      }
+
       [end]
       MenuButton {
         icon-name: "open-menu-symbolic";

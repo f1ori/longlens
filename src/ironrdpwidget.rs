@@ -121,10 +121,15 @@ mod imp {
                 }
                 RdpOutputEvent::ConnectionFailure(reason) => {
                     self.obj().set_state(RdpState::Disconnected);
-                    let error_string = reason.to_string();
+                    let mut error_string = reason.to_string();
+                    let mut source = std::error::Error::source(&reason);
+                    while let Some(e) = source {
+                        error_string.push_str(&format!(": {e}"));
+                        source = e.source();
+                    }
                     self.obj()
                         .emit_by_name::<()>("connection-failed", &[&error_string]);
-                    println!("Connection error {}", reason);
+                    println!("Connection error {error_string}");
                 }
                 RdpOutputEvent::Image {
                     buffer,

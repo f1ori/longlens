@@ -29,17 +29,6 @@ use crate::destination_object::DestinationObject;
 use crate::destinations::Destinations;
 
 
-fn parse_domain_port(input: &str) -> (String, u16) {
-    let mut parts = input.splitn(2, ':');
-    let domain = parts.next().unwrap_or("").to_string();
-    let port = parts
-        .next()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(3389);
-
-    (domain, port)
-}
-
 mod imp {
     use super::*;
 
@@ -57,24 +46,22 @@ mod imp {
     impl LlDestinationPage {
         #[template_callback]
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
-            let index = row.index();
             let destination = self
                 .obj()
                 .destinations()
-                .item(index as u32)
+                .item(row.index() as u32)
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
                 .expect("The object needs to be a `DestinationObject`.");
-            let dialog = self.dialog.get().expect("Dialog should be initialized");
-            dialog.imp().hostnameentry.set_text(&destination.hostname());
-            dialog.imp().usernameentry.set_text(&destination.username());
-            dialog.present(Some(&*self.obj()));
-            dialog.imp().passwordentry.grab_focus();
+            let variant = (destination.hostname(), destination.username(), String::new()).to_variant();
+            self.obj()
+                .activate_action("win.connect", Some(&variant))
+                .expect("win.connect action failed");
         }
 
         #[template_callback]
         fn handle_connection_failed(&self, reason: String) {
-            let dialog = adw::AlertDialog::new(Some("Connction error"), Some(&reason));
+            let dialog = adw::AlertDialog::new(Some("Connection error"), Some(&reason));
             dialog.add_response("close", "Close");
             dialog.present(Some(&*self.obj()));
         }
@@ -263,22 +250,17 @@ impl LlDestinationPage {
 
     pub fn show_add_dialog(&self) {
         let dialog = self.imp().dialog.get().expect("Dialog should be initialized");
+        dialog.set_on_connect(glib::clone!(
+            #[weak(rename_to = page)]
+            self,
+            move |name, hostname, username| {
+                page.add_destination(name.clone(), hostname.clone(), username.clone());
+                page.imp().destinations_data.get().unwrap()
+                    .borrow_mut()
+                    .add(name, hostname, username);
+            }
+        ));
         dialog.present(Some(self));
-    }
-
-    pub fn get_quick_connect_data(&self) -> (String, u16, String, String) {
-        let dialog = self.imp().dialog.get().expect("Dialog should be initialized");
-        let name = dialog.name();
-        let hostname = dialog.hostname();
-        let username = dialog.username();
-        let password = dialog.password();
-        self.add_destination(name.clone(), hostname.clone(), username.clone());
-        self.imp().destinations_data.get().unwrap()
-            .borrow_mut()
-            .add(name, hostname.clone(), username.clone());
-
-        let (domain, port) = parse_domain_port(&hostname);
-        (domain, port, username, password)
     }
 }
 

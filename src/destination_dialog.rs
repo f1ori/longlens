@@ -25,6 +25,7 @@ mod imp {
         pub is_edit_mode: Cell<bool>,
         pub on_save: RefCell<Option<Box<dyn Fn(String, String, String) + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
+        pub on_connect: RefCell<Option<Box<dyn Fn(String, String, String) + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensDestinationDialog {
@@ -90,9 +91,16 @@ mod imp {
         }
 
         fn connect_rdp(&self) {
+            let hostname = self.hostnameentry.text().to_string();
+            let username = self.usernameentry.text().to_string();
+            let password = self.passwordentry.text().to_string();
+            if let Some(on_connect) = self.on_connect.borrow().as_ref() {
+                on_connect(self.nameentry.text().to_string(), hostname.clone(), username.clone());
+            }
+            let variant = (hostname, username, password).to_variant();
             self.obj()
-                .activate_action("win.quick-connect", None)
-                .expect("Quick connect action failed");
+                .activate_action("win.connect", Some(&variant))
+                .expect("win.connect action failed");
             self.obj().close();
         }
     }
@@ -151,6 +159,10 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_delete(&self, callback: impl Fn() + 'static) {
         *self.imp().on_delete.borrow_mut() = Some(Box::new(callback));
+    }
+
+    pub fn set_on_connect(&self, callback: impl Fn(String, String, String) + 'static) {
+        *self.imp().on_connect.borrow_mut() = Some(Box::new(callback));
     }
 
     pub fn set_on_save(&self, callback: impl Fn(String, String, String) + 'static) {

@@ -29,6 +29,16 @@ use crate::destinations::Destinations;
 use crate::ironrdpwidget::{IronRdpWidget, RdpState};
 use crate::destinations_page::LlDestinationPage;
 
+fn parse_domain_port(input: &str) -> (String, u16) {
+    let mut parts = input.splitn(2, ':');
+    let domain = parts.next().unwrap_or("").to_string();
+    let port = parts
+        .next()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(3389);
+    (domain, port)
+}
+
 mod imp {
     use super::*;
 
@@ -60,7 +70,7 @@ mod imp {
 
         #[template_callback]
         fn handle_connection_failed(&self, reason: String) {
-            let dialog = adw::AlertDialog::new(Some("Connction error"), Some(&reason));
+            let dialog = adw::AlertDialog::new(Some("Connection error"), Some(&reason));
             dialog.add_response("close", "Close");
             dialog.present(Some(&*self.obj()));
         }
@@ -138,16 +148,19 @@ impl LongLensWindow {
     }
 
     fn setup_actions(&self) {
-        let action_quick_connect = gio::ActionEntry::builder("quick-connect")
-            .activate(move |window: &Self, _action, _parameter| {
-                let (server, port, username, password) = window.imp().destinations_page.get_quick_connect_data();
+        let action_connect = gio::ActionEntry::builder("connect")
+            .parameter_type(Some(glib::VariantTy::new("(sss)").unwrap()))
+            .activate(move |window: &Self, _action, parameter| {
+                let (hostname, username, password): (String, String, String) =
+                    parameter.unwrap().get().unwrap();
+                let (server, port) = parse_domain_port(&hostname);
                 let width = window.imp().stack.width() as u16;
                 let height = window.imp().stack.height() as u16;
                 window.imp().rdpwidget
                     .connect_to_server(server, port, username, password, width, height);
             })
             .build();
-        self.add_action_entries([action_quick_connect]);
+        self.add_action_entries([action_connect]);
     }
 }
 

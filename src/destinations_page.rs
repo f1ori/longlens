@@ -228,6 +228,31 @@ impl LlDestinationPage {
                         destinations.borrow_mut().update(&destination_object.uuid(), name, hostname, username);
                     }
                 ));
+                dialog.set_on_delete(glib::clone!(
+                    #[weak]
+                    destination_object,
+                    #[weak(rename_to = page)]
+                    page,
+                    move || {
+                        let uuid = destination_object.uuid();
+                        let model = page.destinations();
+                        let pos = model
+                            .iter::<DestinationObject>()
+                            .enumerate()
+                            .find_map(|(i, obj)| {
+                                obj.ok().filter(|o| o.uuid() == uuid).map(|_| i as u32)
+                            });
+                        if let Some(pos) = pos {
+                            model.remove(pos);
+                        }
+                        page.imp()
+                            .destinations_data
+                            .get()
+                            .unwrap()
+                            .borrow_mut()
+                            .remove(&uuid);
+                    }
+                ));
                 dialog.present(Some(&page));
             }
         ));

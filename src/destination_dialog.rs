@@ -20,8 +20,11 @@ mod imp {
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
         pub savebutton: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub deletebutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
         pub on_save: RefCell<Option<Box<dyn Fn(String, String, String) + 'static>>>,
+        pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensDestinationDialog {
@@ -40,6 +43,31 @@ mod imp {
         #[template_callback]
         fn handle_cancelbutton_clicked(&self, _button: &gtk::Button) {
             self.obj().close();
+        }
+
+        #[template_callback]
+        fn handle_deletebutton_clicked(&self, _button: &gtk::Button) {
+            let alert = adw::AlertDialog::new(
+                Some("Delete Destination?"),
+                Some("This action cannot be undone."),
+            );
+            alert.add_response("cancel", "Cancel");
+            alert.add_response("delete", "Delete");
+            alert.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+            alert.set_default_response(Some("cancel"));
+            alert.set_close_response("cancel");
+
+            let obj = self.obj().clone();
+            alert.connect_response(None, move |_, response| {
+                if response == "delete" {
+                    if let Some(on_delete) = obj.imp().on_delete.borrow().as_ref() {
+                        on_delete();
+                    }
+                    obj.close();
+                }
+            });
+
+            alert.present(Some(&*self.obj()));
         }
 
         #[template_callback]
@@ -113,10 +141,16 @@ impl LongLensDestinationDialog {
         if edit_mode {
             self.imp().savebutton.set_label("Save");
             self.set_title("Edit Destination");
+            self.imp().deletebutton.set_visible(true);
         } else {
             self.imp().savebutton.set_label("Connect");
             self.set_title("Add Destination");
+            self.imp().deletebutton.set_visible(false);
         }
+    }
+
+    pub fn set_on_delete(&self, callback: impl Fn() + 'static) {
+        *self.imp().on_delete.borrow_mut() = Some(Box::new(callback));
     }
 
     pub fn set_on_save(&self, callback: impl Fn(String, String, String) + 'static) {

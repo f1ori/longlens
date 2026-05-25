@@ -18,19 +18,26 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+use std::cell::OnceCell;
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use gettextrs::gettext;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::config::VERSION;
+use crate::destinations::Destinations;
 use crate::LongLensWindow;
 
 mod imp {
     use super::*;
 
     #[derive(Debug, Default)]
-    pub struct LongLensApplication {}
+    pub struct LongLensApplication {
+        pub destinations: OnceCell<Rc<RefCell<Destinations>>>,
+    }
 
     #[glib::object_subclass]
     impl ObjectSubclass for LongLensApplication {
@@ -42,6 +49,9 @@ mod imp {
     impl ObjectImpl for LongLensApplication {
         fn constructed(&self) {
             self.parent_constructed();
+            self.destinations
+                .set(Rc::new(RefCell::new(Destinations::load())))
+                .expect("Could not set destinations");
             let obj = self.obj();
             obj.setup_gactions();
         }
@@ -57,6 +67,7 @@ mod imp {
             // Get the current window or create one if necessary
             let window = application.active_window().unwrap_or_else(|| {
                 let window = LongLensWindow::new(&*application);
+                window.set_destinations(application.destinations());
                 window.upcast()
             });
 
@@ -76,6 +87,10 @@ glib::wrapper! {
 }
 
 impl LongLensApplication {
+    pub fn destinations(&self) -> Rc<RefCell<Destinations>> {
+        self.imp().destinations.get().unwrap().clone()
+    }
+
     pub fn new(application_id: &str, flags: &gio::ApplicationFlags) -> Self {
         glib::Object::builder()
             .property("application-id", application_id)

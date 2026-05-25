@@ -22,8 +22,12 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::destinations::Destinations;
 use crate::ironrdpwidget::{IronRdpWidget, RdpState};
-use crate::destinations_page::FsrdpDestinationsPage;
+use crate::destinations_page::LlDestinationPage;
 
 mod imp {
     use super::*;
@@ -34,7 +38,7 @@ mod imp {
         #[template_child]
         pub stack: TemplateChild<gtk::Stack>,
         #[template_child]
-        pub destinations_page: TemplateChild<FsrdpDestinationsPage>,
+        pub destinations_page: TemplateChild<LlDestinationPage>,
         #[template_child]
         pub disconnectbutton: TemplateChild<gtk::Button>,
         #[template_child]
@@ -123,6 +127,10 @@ glib::wrapper! {
 }
 
 impl LongLensWindow {
+    pub fn set_destinations(&self, destinations: Rc<RefCell<Destinations>>) {
+        self.imp().destinations_page.set_destinations(destinations);
+    }
+
     pub fn new<P: IsA<gtk::Application>>(application: &P) -> Self {
         glib::Object::builder()
             .property("application", application)

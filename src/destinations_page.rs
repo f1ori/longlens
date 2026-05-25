@@ -1,5 +1,4 @@
-/* window.rs
- *
+/* 
  * Copyright 2025 Florian Richter
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,15 +17,16 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 use std::cell::OnceCell;
-use std::fs::File;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::destination_dialog::LongLensDestinationDialog;
-use crate::destination_object::{DestinationData, DestinationObject};
-use crate::utils::data_path;
+use crate::destination_object::DestinationObject;
+use crate::destinations::Destinations;
 
 
 fn parse_domain_port(input: &str) -> (String, u16) {
@@ -46,14 +46,15 @@ mod imp {
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destinations_page.ui")]
-    pub struct FsrdpDestinationsPage {
+    pub struct LlDestinationPage {
         #[template_child]
         pub destinations_list: TemplateChild<gtk::ListBox>,
         pub destinations: OnceCell<gio::ListStore>,
         pub dialog: OnceCell<LongLensDestinationDialog>,
+        pub destinations_data: OnceCell<Rc<RefCell<Destinations>>>,
     }
     #[gtk::template_callbacks]
-    impl FsrdpDestinationsPage {
+    impl LlDestinationPage {
         #[template_callback]
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
             let index = row.index();
@@ -80,9 +81,9 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for FsrdpDestinationsPage {
-        const NAME: &'static str = "FsrdpDestinationsPage";
-        type Type = super::FsrdpDestinationsPage;
+    impl ObjectSubclass for LlDestinationPage {
+        const NAME: &'static str = "LlDestinationPage";
+        type Type = super::LlDestinationPage;
         type ParentType = adw::Bin;
 
         fn class_init(klass: &mut Self::Class) {
@@ -95,27 +96,26 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for FsrdpDestinationsPage {
+    impl ObjectImpl for LlDestinationPage {
         fn constructed(&self) {
             self.parent_constructed();
             self.obj().setup_destinations();
-            self.obj().load_destinations();
             self.dialog
                 .set(LongLensDestinationDialog::new())
                 .expect("Could not set dialog");
         }
     }
-    impl WidgetImpl for FsrdpDestinationsPage {}
-    impl BinImpl for FsrdpDestinationsPage {}
+    impl WidgetImpl for LlDestinationPage {}
+    impl BinImpl for LlDestinationPage {}
 }
 
 glib::wrapper! {
-    pub struct FsrdpDestinationsPage(ObjectSubclass<imp::FsrdpDestinationsPage>)
+    pub struct LlDestinationPage(ObjectSubclass<imp::LlDestinationPage>)
         @extends gtk::Widget, adw::Bin,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
-impl FsrdpDestinationsPage {
+impl LlDestinationPage {
     fn destinations(&self) -> gio::ListStore {
         self.imp()
             .destinations
@@ -148,16 +148,24 @@ impl FsrdpDestinationsPage {
         )
     }
 
+    pub fn set_destinations(&self, destinations: Rc<RefCell<Destinations>>) {
+        self.imp()
+            .destinations_data
+            .set(destinations)
+            .expect("Could not set destinations_data");
+        self.load_destinations();
+    }
+
     pub fn load_destinations(&self) {
-        if let Ok(file) = File::open(data_path()) {
-            let data: Vec<DestinationData> = serde_json::from_reader(file)
-                .expect("It should be possible to read the destinations from the json file.");
-            let destination_objects: Vec<DestinationObject> = data
-                .into_iter()
-                .map(DestinationObject::from_destination_data)
-                .collect();
-            self.destinations().extend_from_slice(&destination_objects);
-        }
+        let data = self.imp().destinations_data.get().unwrap();
+        let destination_objects: Vec<DestinationObject> = data
+            .borrow()
+            .items()
+            .iter()
+            .cloned()
+            .map(DestinationObject::from_destination_data)
+            .collect();
+        self.destinations().extend_from_slice(&destination_objects);
     }
 
     pub fn add_destination(&self, name: String, hostname: String, username: String) {
@@ -171,18 +179,6 @@ impl FsrdpDestinationsPage {
             let destination = DestinationObject::new(name, hostname, username);
             self.destinations().append(&destination);
         }
-    }
-
-    pub fn save_destinations(&self) {
-        // Store task data in vector
-        let data: Vec<DestinationData> = self
-            .destinations()
-            .iter::<DestinationObject>()
-            .filter_map(|destination_object| destination_object.ok())
-            .map(|destination_object| destination_object.destination_data())
-            .collect();
-        let file = File::create(data_path()).expect("Could not create json file.");
-        serde_json::to_writer(file, &data).expect("Could not write data to json file");
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> adw::ActionRow {
@@ -216,6 +212,7 @@ impl FsrdpDestinationsPage {
             #[weak(rename_to = page)]
             self,
             move |_button| {
+                let destinations = page.imp().destinations_data.get().unwrap().clone();
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
@@ -224,13 +221,11 @@ impl FsrdpDestinationsPage {
                 dialog.set_on_save(glib::clone!(
                     #[weak]
                     destination_object,
-                    #[weak]
-                    page,
                     move |name, hostname, username| {
-                        destination_object.set_name(name);
-                        destination_object.set_hostname(hostname);
-                        destination_object.set_username(username);
-                        page.save_destinations();
+                        destination_object.set_name(name.clone());
+                        destination_object.set_hostname(hostname.clone());
+                        destination_object.set_username(username.clone());
+                        destinations.borrow_mut().update(&destination_object.uuid(), name, hostname, username);
                     }
                 ));
                 dialog.present(Some(&page));
@@ -252,8 +247,10 @@ impl FsrdpDestinationsPage {
         let hostname = dialog.hostname();
         let username = dialog.username();
         let password = dialog.password();
-        self.add_destination(name, hostname.clone(), username.clone());
-        self.save_destinations();
+        self.add_destination(name.clone(), hostname.clone(), username.clone());
+        self.imp().destinations_data.get().unwrap()
+            .borrow_mut()
+            .add(name, hostname.clone(), username.clone());
 
         let (domain, port) = parse_domain_port(&hostname);
         (domain, port, username, password)

@@ -37,7 +37,9 @@ mod imp {
     impl LongLensDestinationDialog {
         #[template_callback]
         fn handle_entries_activated(&self, _entry: &adw::EntryRow) {
-            self.handle_action();
+            if !self.hostnameentry.text().is_empty() {
+                self.handle_action();
+            }
         }
 
         #[template_callback]
@@ -117,6 +119,18 @@ mod imp {
             save_only.connect_activate(move |_, _| obj.imp().save_only());
             action_group.add_action(&save_only);
             self.obj().insert_action_group("dialog", Some(&action_group));
+
+            self.savebutton.set_sensitive(false);
+            self.hostnameentry.connect_notify_local(
+                Some("text"),
+                glib::clone!(
+                    #[weak(rename_to = dialog)]
+                    self,
+                    move |entry, _| {
+                        dialog.savebutton.set_sensitive(!entry.text().is_empty());
+                    }
+                ),
+            );
 
             self.obj().connect_map(|dialog| {
                 dialog.imp().hostnameentry.grab_focus();

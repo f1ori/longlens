@@ -15,15 +15,6 @@ template $LongLensDestinationDialog: Adw.Dialog {
         clicked => $handle_cancelbutton_clicked() swapped;
       }
 
-      [start]
-      Button deletebutton {
-        visible: false;
-        icon-name: "user-trash-symbolic";
-        tooltip-text: _("Delete Destination");
-        clicked => $handle_deletebutton_clicked() swapped;
-        styles ["destructive-action"]
-      }
-
       [end]
       Adw.SplitButton savebutton {
         label: _("Save & Connect");

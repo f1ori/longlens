@@ -187,18 +187,26 @@ impl LlDestinationPage {
             .sync_create()
             .build();
 
-        let edit_button = gtk::Button::builder()
-            .icon_name("document-edit-symbolic")
+        let menu = gio::Menu::new();
+        menu.append(Some("Edit"), Some("row.edit"));
+        menu.append(Some("Delete"), Some("row.delete"));
+
+        let menu_button = gtk::MenuButton::builder()
+            .icon_name("view-more-symbolic")
+            .menu_model(&menu)
             .valign(gtk::Align::Center)
             .build();
-        edit_button.add_css_class("flat");
+        menu_button.add_css_class("flat");
 
-        edit_button.connect_clicked(glib::clone!(
+        let action_group = gio::SimpleActionGroup::new();
+
+        let edit_action = gio::SimpleAction::new("edit", None);
+        edit_action.connect_activate(glib::clone!(
             #[weak]
             destination_object,
             #[weak(rename_to = page)]
             self,
-            move |_button| {
+            move |_, _| {
                 let destinations = page.imp().destinations_data.get().unwrap().clone();
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
@@ -243,8 +251,60 @@ impl LlDestinationPage {
                 dialog.present(Some(&page));
             }
         ));
+        action_group.add_action(&edit_action);
 
-        row.add_suffix(&edit_button);
+        let delete_action = gio::SimpleAction::new("delete", None);
+        delete_action.connect_activate(glib::clone!(
+            #[weak]
+            destination_object,
+            #[weak(rename_to = page)]
+            self,
+            move |_, _| {
+                let alert = adw::AlertDialog::new(
+                    Some("Delete Destination?"),
+                    Some("This action cannot be undone."),
+                );
+                alert.add_response("cancel", "Cancel");
+                alert.add_response("delete", "Delete");
+                alert.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+                alert.set_default_response(Some("cancel"));
+                alert.set_close_response("cancel");
+
+                alert.connect_response(None, glib::clone!(
+                    #[weak]
+                    destination_object,
+                    #[weak]
+                    page,
+                    move |_, response| {
+                        if response == "delete" {
+                            let uuid = destination_object.uuid();
+                            let model = page.destinations();
+                            let pos = model
+                                .iter::<DestinationObject>()
+                                .enumerate()
+                                .find_map(|(i, obj)| {
+                                    obj.ok().filter(|o| o.uuid() == uuid).map(|_| i as u32)
+                                });
+                            if let Some(pos) = pos {
+                                model.remove(pos);
+                            }
+                            page.imp()
+                                .destinations_data
+                                .get()
+                                .unwrap()
+                                .borrow_mut()
+                                .remove(&uuid);
+                        }
+                    }
+                ));
+
+                alert.present(Some(&page));
+            }
+        ));
+        action_group.add_action(&delete_action);
+
+        row.insert_action_group("row", Some(&action_group));
+        row.add_suffix(&menu_button);
         row
     }
 

@@ -21,8 +21,6 @@ mod imp {
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
         pub savebutton: TemplateChild<adw::SplitButton>,
-        #[template_child]
-        pub deletebutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
         pub on_save: RefCell<Option<Box<dyn Fn(String, String, String) + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
@@ -45,31 +43,6 @@ mod imp {
         #[template_callback]
         fn handle_cancelbutton_clicked(&self, _button: &gtk::Button) {
             self.obj().close();
-        }
-
-        #[template_callback]
-        fn handle_deletebutton_clicked(&self, _button: &gtk::Button) {
-            let alert = adw::AlertDialog::new(
-                Some("Delete Destination?"),
-                Some("This action cannot be undone."),
-            );
-            alert.add_response("cancel", "Cancel");
-            alert.add_response("delete", "Delete");
-            alert.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
-            alert.set_default_response(Some("cancel"));
-            alert.set_close_response("cancel");
-
-            let obj = self.obj().clone();
-            alert.connect_response(None, move |_, response| {
-                if response == "delete" {
-                    if let Some(on_delete) = obj.imp().on_delete.borrow().as_ref() {
-                        on_delete();
-                    }
-                    obj.close();
-                }
-            });
-
-            alert.present(Some(&*self.obj()));
         }
 
         #[template_callback]
@@ -169,10 +142,8 @@ impl LongLensDestinationDialog {
         self.imp().is_edit_mode.set(edit_mode);
         if edit_mode {
             self.set_title("Edit Destination");
-            self.imp().deletebutton.set_visible(true);
         } else {
             self.set_title("Add Destination");
-            self.imp().deletebutton.set_visible(false);
         }
     }
 

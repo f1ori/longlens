@@ -51,6 +51,27 @@ mod imp {
         #[property(name = "hostname", get, set, type = String, member = hostname)]
         #[property(name = "username", get, set, type = String, member = username)]
         pub data: RefCell<DestinationData>,
+        #[property(name = "display-title", get = Self::compute_display_title, type = String)]
+        _display_title: (),
+        #[property(name = "display-subtitle", get = Self::compute_display_subtitle, type = String)]
+        _display_subtitle: (),
+    }
+
+    impl DestinationObject {
+        fn compute_display_title(&self) -> String {
+            let name = self.obj().name();
+            if name.is_empty() { self.obj().hostname() } else { name }
+        }
+
+        fn compute_display_subtitle(&self) -> String {
+            let obj = self.obj();
+            let username = obj.username();
+            if obj.name().is_empty() {
+                format!("User: {}", username)
+            } else {
+                format!("Host: {}, User: {}", obj.hostname(), username)
+            }
+        }
     }
 
     #[glib::object_subclass]
@@ -60,7 +81,23 @@ mod imp {
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for DestinationObject {}
+    impl ObjectImpl for DestinationObject {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let obj = self.obj();
+            obj.connect_notify_local(Some("name"), |this, _| {
+                this.notify("display-title");
+                this.notify("display-subtitle");
+            });
+            obj.connect_notify_local(Some("hostname"), |this, _| {
+                this.notify("display-title");
+                this.notify("display-subtitle");
+            });
+            obj.connect_notify_local(Some("username"), |this, _| {
+                this.notify("display-subtitle");
+            });
+        }
+    }
 }
 
 glib::wrapper! {

@@ -55,6 +55,7 @@ mod imp {
         pub adddestinationbutton: TemplateChild<gtk::Button>,
         #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
+        pub connection_display_title: RefCell<String>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -128,13 +129,17 @@ mod imp {
                 #[weak(rename_to = window)]
                 self,
                 move |widget| {
-                    if widget.state() != RdpState::Connected { return };
-                    window
-                        .obj()
-                        .surface()
-                        .as_ref()
-                        .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
-                        .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
+                    let obj = window.obj();
+                    if widget.state() == RdpState::Connected {
+                        let display_title = window.connection_display_title.borrow().clone();
+                        obj.set_title(Some(&display_title));
+                        obj.surface()
+                            .as_ref()
+                            .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
+                            .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
+                    } else {
+                        obj.set_title(Some("Long Lens"));
+                    }
                 }
             ));
             self.obj().setup_actions();
@@ -165,10 +170,11 @@ impl LongLensWindow {
 
     fn setup_actions(&self) {
         let action_connect = gio::ActionEntry::builder("connect")
-            .parameter_type(Some(glib::VariantTy::new("(sss)").unwrap()))
+            .parameter_type(Some(glib::VariantTy::new("(ssss)").unwrap()))
             .activate(move |window: &Self, _action, parameter| {
-                let (hostname, username, password): (String, String, String) =
+                let (hostname, username, password, display_title): (String, String, String, String) =
                     parameter.unwrap().get().unwrap();
+                *window.imp().connection_display_title.borrow_mut() = display_title;
                 let (server, port) = parse_domain_port(&hostname);
                 let width = window.imp().stack.width() as u16;
                 let height = window.imp().stack.height() as u16;

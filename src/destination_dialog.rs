@@ -85,20 +85,22 @@ mod imp {
         }
 
         fn connect_rdp(&self) {
+            let name = self.nameentry.text().to_string();
             let hostname = self.hostnameentry.text().to_string();
             let username = self.usernameentry.text().to_string();
             let password = self.passwordentry.text().to_string();
             let remember = self.rememberpasswordswitch.is_active();
             if let Some(on_connect) = self.on_connect.borrow().as_ref() {
                 on_connect(
-                    self.nameentry.text().to_string(),
+                    name.clone(),
                     hostname.clone(),
                     username.clone(),
                     password.clone(),
                     remember,
                 );
             }
-            let variant = (hostname, username, password).to_variant();
+            let display_title = if name.is_empty() { hostname.clone() } else { name };
+            let variant = (hostname, username, password, display_title).to_variant();
             self.obj()
                 .activate_action("win.connect", Some(&variant))
                 .expect("win.connect action failed");

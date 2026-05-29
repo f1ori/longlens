@@ -55,7 +55,8 @@ mod imp {
                 .downcast::<DestinationObject>()
                 .expect("The object needs to be a `DestinationObject`.");
             let password = secrets::get_password(&destination.uuid()).unwrap_or_default();
-            let variant = (destination.hostname(), destination.username(), password).to_variant();
+            let display_title = destination.property::<String>("display-title");
+            let variant = (destination.hostname(), destination.username(), password, display_title).to_variant();
             self.obj()
                 .activate_action("win.connect", Some(&variant))
                 .expect("win.connect action failed");
@@ -174,15 +175,11 @@ impl LlDestinationPage {
             .build();
 
         destination_object
-            .bind_property("hostname", &row, "title")
+            .bind_property("display-title", &row, "title")
             .sync_create()
             .build();
         destination_object
-            .bind_property("username", &row, "subtitle")
-            .transform_to(|_binding, value: glib::Value| {
-                let text = value.get::<String>().unwrap_or_default();
-                Some(format!("User: {}", text).to_value())
-            })
+            .bind_property("display-subtitle", &row, "subtitle")
             .sync_create()
             .build();
 

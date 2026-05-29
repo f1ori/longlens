@@ -108,6 +108,22 @@ mod imp {
                 })
                 .sync_create()
                 .build();
+            self.rdpwidget
+                .bind_property::<gtk::Button>("state", self.disconnectbutton.as_ref(), "visible")
+                .transform_to(|_binding, value: glib::Value| {
+                    let state = value.get::<RdpState>().unwrap_or_default();
+                    Some(state == RdpState::Connected)
+                })
+                .sync_create()
+                .build();
+            self.rdpwidget
+                .bind_property::<gtk::Button>("state", self.adddestinationbutton.as_ref(), "visible")
+                .transform_to(|_binding, value: glib::Value| {
+                    let state = value.get::<RdpState>().unwrap_or_default();
+                    Some(state != RdpState::Connected)
+                })
+                .sync_create()
+                .build();
             self.rdpwidget.connect_state_notify(glib::clone!(
                 #[weak(rename_to = window)]
                 self,

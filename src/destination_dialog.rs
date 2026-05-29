@@ -26,7 +26,6 @@ mod imp {
         pub is_edit_mode: Cell<bool>,
         pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, String, bool) + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
-        pub on_connect: RefCell<Option<Box<dyn Fn(String, String, String, String, bool) + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensDestinationDialog {
@@ -54,50 +53,28 @@ mod imp {
             self.handle_action();
         }
 
+        fn form_values(&self) -> (String, String, String, String, bool) {
+            (
+                self.nameentry.text().to_string(),
+                self.hostnameentry.text().to_string(),
+                self.usernameentry.text().to_string(),
+                self.passwordentry.text().to_string(),
+                self.rememberpasswordswitch.is_active(),
+            )
+        }
+
         fn save_only(&self) {
-            let name = self.nameentry.text().to_string();
-            let hostname = self.hostnameentry.text().to_string();
-            let username = self.usernameentry.text().to_string();
-            let password = self.passwordentry.text().to_string();
-            let remember = self.rememberpasswordswitch.is_active();
-            if self.is_edit_mode.get() {
-                if let Some(on_save) = self.on_save.borrow().as_ref() {
-                    on_save(name, hostname, username, password, remember);
-                }
-            } else if let Some(on_connect) = self.on_connect.borrow().as_ref() {
-                on_connect(name, hostname, username, password, remember);
+            let (name, hostname, username, password, remember) = self.form_values();
+            if let Some(on_save) = self.on_save.borrow().as_ref() {
+                on_save(name, hostname, username, password, remember);
             }
             self.obj().close();
         }
 
         fn handle_action(&self) {
-            if self.is_edit_mode.get() {
-                let name = self.nameentry.text().to_string();
-                let hostname = self.hostnameentry.text().to_string();
-                let username = self.usernameentry.text().to_string();
-                let password = self.passwordentry.text().to_string();
-                let remember = self.rememberpasswordswitch.is_active();
-                if let Some(on_save) = self.on_save.borrow().as_ref() {
-                    on_save(name, hostname, username, password, remember);
-                }
-            }
-            self.connect_rdp();
-        }
-
-        fn connect_rdp(&self) {
-            let name = self.nameentry.text().to_string();
-            let hostname = self.hostnameentry.text().to_string();
-            let username = self.usernameentry.text().to_string();
-            let password = self.passwordentry.text().to_string();
-            let remember = self.rememberpasswordswitch.is_active();
-            if let Some(on_connect) = self.on_connect.borrow().as_ref() {
-                on_connect(
-                    name.clone(),
-                    hostname.clone(),
-                    username.clone(),
-                    password.clone(),
-                    remember,
-                );
+            let (name, hostname, username, password, remember) = self.form_values();
+            if let Some(on_save) = self.on_save.borrow().as_ref() {
+                on_save(name.clone(), hostname.clone(), username.clone(), password.clone(), remember);
             }
             let display_title = if name.is_empty() { hostname.clone() } else { name };
             let variant = (hostname, username, password, display_title).to_variant();
@@ -191,22 +168,15 @@ impl LongLensDestinationDialog {
         }
     }
 
-    pub fn set_on_delete(&self, callback: impl Fn() + 'static) {
-        *self.imp().on_delete.borrow_mut() = Some(Box::new(callback));
-    }
-
-    pub fn set_on_connect(
-        &self,
-        callback: impl Fn(String, String, String, String, bool) + 'static,
-    ) {
-        *self.imp().on_connect.borrow_mut() = Some(Box::new(callback));
-    }
-
     pub fn set_on_save(
         &self,
         callback: impl Fn(String, String, String, String, bool) + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
+    }
+
+    pub fn set_on_delete(&self, callback: impl Fn() + 'static) {
+        *self.imp().on_delete.borrow_mut() = Some(Box::new(callback));
     }
 
     pub fn name(&self) -> String {

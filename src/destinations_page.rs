@@ -40,7 +40,6 @@ mod imp {
         #[template_child]
         pub destinations_list: TemplateChild<gtk::ListBox>,
         pub destinations: OnceCell<gio::ListStore>,
-        pub dialog: OnceCell<LongLensDestinationDialog>,
         pub destinations_data: OnceCell<Rc<RefCell<Destinations>>>,
     }
     #[gtk::template_callbacks]
@@ -90,9 +89,6 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.obj().setup_destinations();
-            self.dialog
-                .set(LongLensDestinationDialog::new())
-                .expect("Could not set dialog");
         }
     }
     impl WidgetImpl for LlDestinationPage {}
@@ -319,8 +315,8 @@ impl LlDestinationPage {
     }
 
     pub fn show_add_dialog(&self) {
-        let dialog = self.imp().dialog.get().expect("Dialog should be initialized");
-        dialog.set_on_connect(glib::clone!(
+        let dialog = LongLensDestinationDialog::new();
+        dialog.set_on_save(glib::clone!(
             #[weak(rename_to = page)]
             self,
             move |name, hostname, username, password, remember| {

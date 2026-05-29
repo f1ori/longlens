@@ -12,4 +12,5 @@ RUN microdnf install -y --refresh \
     gtk4-devel \
     libadwaita-devel \
     rust-analyzer \
-    && microdnf clean all
+    && microdnf clean all \
+    && useradd -m -u 1000 vscode

@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright 2025 Florian Richter
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,8 +25,9 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::destination_dialog::LongLensDestinationDialog;
-use crate::destination_object::DestinationObject;
+use crate::destination_object::{DestinationData, DestinationObject};
 use crate::destinations::Destinations;
+use crate::secrets;
 
 
 mod imp {
@@ -53,7 +54,8 @@ mod imp {
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
                 .expect("The object needs to be a `DestinationObject`.");
-            let variant = (destination.hostname(), destination.username(), String::new()).to_variant();
+            let password = secrets::get_password(&destination.uuid()).unwrap_or_default();
+            let variant = (destination.hostname(), destination.username(), password).to_variant();
             self.obj()
                 .activate_action("win.connect", Some(&variant))
                 .expect("win.connect action failed");
@@ -155,17 +157,14 @@ impl LlDestinationPage {
         self.destinations().extend_from_slice(&destination_objects);
     }
 
-    pub fn add_destination(&self, name: String, hostname: String, username: String) {
-        let found = self
-            .destinations()
-            .iter::<DestinationObject>()
-            .filter_map(|destination_object| destination_object.ok())
-            .map(|destination_object| destination_object.destination_data())
-            .find(|o| o.hostname == hostname && o.username == username);
-        if found.is_none() {
-            let destination = DestinationObject::new(name, hostname, username);
-            self.destinations().append(&destination);
-        }
+    /// Add a destination to both the list model and persistent storage.
+    /// Returns the UUID if added (None if a duplicate hostname+username already exists).
+    pub fn add_destination(&self, name: String, hostname: String, username: String) -> Option<String> {
+        let destinations = self.imp().destinations_data.get().unwrap();
+        let uuid = destinations.borrow_mut().add(name.clone(), hostname.clone(), username.clone())?;
+        let data = DestinationData { uuid: uuid.clone(), name, hostname, username };
+        self.destinations().append(&DestinationObject::from_destination_data(data));
+        Some(uuid)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> adw::ActionRow {
@@ -212,15 +211,27 @@ impl LlDestinationPage {
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
                 dialog.imp().usernameentry.set_text(&destination_object.username());
+                // Pre-fill stored password if available
+                if let Some(pw) = secrets::get_password(&destination_object.uuid()) {
+                    dialog.imp().passwordentry.set_text(&pw);
+                } else {
+                    dialog.imp().rememberpasswordswitch.set_active(false);
+                }
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
                     #[weak]
                     destination_object,
-                    move |name, hostname, username| {
+                    move |name, hostname, username, password, remember| {
                         destination_object.set_name(name.clone());
                         destination_object.set_hostname(hostname.clone());
                         destination_object.set_username(username.clone());
                         destinations.borrow_mut().update(&destination_object.uuid(), name, hostname, username);
+                        let uuid = destination_object.uuid();
+                        if remember && !password.is_empty() {
+                            secrets::store_password(&uuid, &password);
+                        } else {
+                            secrets::delete_password(&uuid);
+                        }
                     }
                 ));
                 dialog.set_on_delete(glib::clone!(
@@ -230,6 +241,7 @@ impl LlDestinationPage {
                     page,
                     move || {
                         let uuid = destination_object.uuid();
+                        secrets::delete_password(&uuid);
                         let model = page.destinations();
                         let pos = model
                             .iter::<DestinationObject>()
@@ -278,6 +290,7 @@ impl LlDestinationPage {
                     move |_, response| {
                         if response == "delete" {
                             let uuid = destination_object.uuid();
+                            secrets::delete_password(&uuid);
                             let model = page.destinations();
                             let pos = model
                                 .iter::<DestinationObject>()
@@ -313,14 +326,14 @@ impl LlDestinationPage {
         dialog.set_on_connect(glib::clone!(
             #[weak(rename_to = page)]
             self,
-            move |name, hostname, username| {
-                page.add_destination(name.clone(), hostname.clone(), username.clone());
-                page.imp().destinations_data.get().unwrap()
-                    .borrow_mut()
-                    .add(name, hostname, username);
+            move |name, hostname, username, password, remember| {
+                if let Some(uuid) = page.add_destination(name, hostname, username) {
+                    if remember && !password.is_empty() {
+                        secrets::store_password(&uuid, &password);
+                    }
+                }
             }
         ));
         dialog.present(Some(self));
     }
 }
-

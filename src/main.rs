@@ -20,6 +20,7 @@
 
 mod destination_dialog;
 mod application;
+mod secrets;
 mod config;
 mod destination_object;
 mod destinations;

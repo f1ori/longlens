@@ -18,13 +18,15 @@ mod imp {
         #[template_child]
         pub usernameentry: TemplateChild<adw::EntryRow>,
         #[template_child]
+        pub rememberpasswordswitch: TemplateChild<adw::SwitchRow>,
+        #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
         pub savebutton: TemplateChild<adw::SplitButton>,
         pub is_edit_mode: Cell<bool>,
-        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String) + 'static>>>,
+        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, String, bool) + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
-        pub on_connect: RefCell<Option<Box<dyn Fn(String, String, String) + 'static>>>,
+        pub on_connect: RefCell<Option<Box<dyn Fn(String, String, String, String, bool) + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensDestinationDialog {
@@ -56,12 +58,14 @@ mod imp {
             let name = self.nameentry.text().to_string();
             let hostname = self.hostnameentry.text().to_string();
             let username = self.usernameentry.text().to_string();
+            let password = self.passwordentry.text().to_string();
+            let remember = self.rememberpasswordswitch.is_active();
             if self.is_edit_mode.get() {
                 if let Some(on_save) = self.on_save.borrow().as_ref() {
-                    on_save(name, hostname, username);
+                    on_save(name, hostname, username, password, remember);
                 }
             } else if let Some(on_connect) = self.on_connect.borrow().as_ref() {
-                on_connect(name, hostname, username);
+                on_connect(name, hostname, username, password, remember);
             }
             self.obj().close();
         }
@@ -71,8 +75,10 @@ mod imp {
                 let name = self.nameentry.text().to_string();
                 let hostname = self.hostnameentry.text().to_string();
                 let username = self.usernameentry.text().to_string();
+                let password = self.passwordentry.text().to_string();
+                let remember = self.rememberpasswordswitch.is_active();
                 if let Some(on_save) = self.on_save.borrow().as_ref() {
-                    on_save(name, hostname, username);
+                    on_save(name, hostname, username, password, remember);
                 }
             }
             self.connect_rdp();
@@ -82,8 +88,15 @@ mod imp {
             let hostname = self.hostnameentry.text().to_string();
             let username = self.usernameentry.text().to_string();
             let password = self.passwordentry.text().to_string();
+            let remember = self.rememberpasswordswitch.is_active();
             if let Some(on_connect) = self.on_connect.borrow().as_ref() {
-                on_connect(self.nameentry.text().to_string(), hostname.clone(), username.clone());
+                on_connect(
+                    self.nameentry.text().to_string(),
+                    hostname.clone(),
+                    username.clone(),
+                    password.clone(),
+                    remember,
+                );
             }
             let variant = (hostname, username, password).to_variant();
             self.obj()
@@ -132,8 +145,23 @@ mod imp {
                 ),
             );
 
+            self.rememberpasswordswitch.connect_active_notify(glib::clone!(
+                #[weak(rename_to = dialog)]
+                self,
+                move |switch| {
+                    if !switch.is_active() {
+                        dialog.passwordentry.set_text("");
+                    }
+                }
+            ));
+
             self.obj().connect_map(|dialog| {
                 dialog.imp().hostnameentry.grab_focus();
+                let available = crate::secrets::is_available();
+                dialog.imp().rememberpasswordswitch.set_sensitive(available);
+                if !available {
+                    dialog.imp().rememberpasswordswitch.set_active(false);
+                }
             });
         }
     }
@@ -165,11 +193,17 @@ impl LongLensDestinationDialog {
         *self.imp().on_delete.borrow_mut() = Some(Box::new(callback));
     }
 
-    pub fn set_on_connect(&self, callback: impl Fn(String, String, String) + 'static) {
+    pub fn set_on_connect(
+        &self,
+        callback: impl Fn(String, String, String, String, bool) + 'static,
+    ) {
         *self.imp().on_connect.borrow_mut() = Some(Box::new(callback));
     }
 
-    pub fn set_on_save(&self, callback: impl Fn(String, String, String) + 'static) {
+    pub fn set_on_save(
+        &self,
+        callback: impl Fn(String, String, String, String, bool) + 'static,
+    ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
 
@@ -187,5 +221,9 @@ impl LongLensDestinationDialog {
 
     pub fn password(&self) -> String {
         self.imp().passwordentry.text().to_string()
+    }
+
+    pub fn remember_password(&self) -> bool {
+        self.imp().rememberpasswordswitch.is_active()
     }
 }

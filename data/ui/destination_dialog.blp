@@ -45,6 +45,12 @@ template $LongLensDestinationDialog: Adw.Dialog {
           title: _("Password");
           entry-activated => $handle_entries_activated() swapped;
         }
+
+        Adw.SwitchRow rememberpasswordswitch {
+          title: _("Remember password");
+          subtitle: _("Store the password in the keyring");
+          active: true;
+        }
       }
     }
   }

@@ -45,19 +45,23 @@ impl Destinations {
         &self.items
     }
 
-    pub fn add(&mut self, name: String, hostname: String, username: String) {
+    pub fn add(&mut self, name: String, hostname: String, username: String) -> Option<String> {
         let already_exists = self
             .items
             .iter()
             .any(|d| d.hostname == hostname && d.username == username);
         if !already_exists {
+            let uuid = uuid::Uuid::new_v4().to_string();
             self.items.push(DestinationData {
-                uuid: uuid::Uuid::new_v4().to_string(),
+                uuid: uuid.clone(),
                 name,
                 hostname,
                 username,
             });
             self.save();
+            Some(uuid)
+        } else {
+            None
         }
     }
 

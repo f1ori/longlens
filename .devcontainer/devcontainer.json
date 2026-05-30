@@ -6,6 +6,7 @@
 		"context": "."
 	},
 	"mounts": [
+		// Mount DBus socket to access keyring
 		"source=/run/user/1000/bus,target=/run/user/1000/bus,type=bind"
 	],
 	"containerEnv": {

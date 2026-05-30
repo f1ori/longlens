@@ -37,6 +37,7 @@ mod imp {
     #[derive(Debug, Default)]
     pub struct LongLensApplication {
         pub destinations: OnceCell<Rc<RefCell<Destinations>>>,
+        pub settings: OnceCell<gio::Settings>,
     }
 
     #[glib::object_subclass]
@@ -52,12 +53,21 @@ mod imp {
             self.destinations
                 .set(Rc::new(RefCell::new(Destinations::load())))
                 .expect("Could not set destinations");
+            self.settings
+                .set(gio::Settings::new("de.f1ori.longlens"))
+                .expect("Could not create settings");
             let obj = self.obj();
             obj.setup_gactions();
         }
     }
 
     impl ApplicationImpl for LongLensApplication {
+        fn startup(&self) {
+            self.parent_startup();
+            let scheme = self.settings.get().unwrap().string("color-scheme");
+            super::LongLensApplication::apply_color_scheme(&scheme);
+        }
+
         // We connect to the activate callback to create a window when the application
         // has been launched. Additionally, this callback notifies us when the user
         // tries to launch a "second instance" of the application. When they try
@@ -99,6 +109,19 @@ impl LongLensApplication {
             .build()
     }
 
+    fn settings(&self) -> &gio::Settings {
+        self.imp().settings.get().unwrap()
+    }
+
+    fn apply_color_scheme(scheme: &str) {
+        let color_scheme = match scheme {
+            "light" => adw::ColorScheme::ForceLight,
+            "dark" => adw::ColorScheme::ForceDark,
+            _ => adw::ColorScheme::Default,
+        };
+        adw::StyleManager::default().set_color_scheme(color_scheme);
+    }
+
     fn setup_gactions(&self) {
         let quit_action = gio::ActionEntry::builder("quit")
             .activate(move |app: &Self, _, _| app.quit())
@@ -106,6 +129,28 @@ impl LongLensApplication {
         let about_action = gio::ActionEntry::builder("about")
             .activate(move |app: &Self, _, _| app.show_about())
             .build();
+
+        let initial_scheme = self.settings().string("color-scheme");
+
+        let color_scheme_action = gio::SimpleAction::new_stateful(
+            "color-scheme",
+            Some(glib::VariantTy::STRING),
+            &initial_scheme.to_variant(),
+        );
+        color_scheme_action.connect_activate(glib::clone!(
+            #[weak(rename_to = app)]
+            self,
+            move |action, parameter| {
+                let scheme = parameter
+                    .and_then(|v| v.get::<String>())
+                    .unwrap_or_else(|| "default".to_string());
+                action.set_state(&scheme.to_variant());
+                app.settings().set_string("color-scheme", &scheme).ok();
+                Self::apply_color_scheme(&scheme);
+            }
+        ));
+        self.add_action(&color_scheme_action);
+
         self.add_action_entries([quit_action, about_action]);
     }
 

@@ -54,11 +54,30 @@ template $LongLensWindow: Adw.ApplicationWindow {
 
 menu primary_menu {
   section {
-    item {
-      action: "app.preferences";
-      label: _("_Preferences");
-    }
+    submenu {
+      label: _("_Theme");
 
+      item {
+        action: "app.color-scheme";
+        label: _("_System Default");
+        target: "default";
+      }
+
+      item {
+        action: "app.color-scheme";
+        label: _("_Light");
+        target: "light";
+      }
+
+      item {
+        action: "app.color-scheme";
+        label: _("_Dark");
+        target: "dark";
+      }
+    }
+  }
+
+  section {
     item {
       action: "app.about";
       label: _("_About Long Lens");

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="longlens">
 	<schema id="de.f1ori.longlens" path="/de/f1ori/longlens/">
+		<key name="color-scheme" type="s">
+			<default>'default'</default>
+			<summary>Color Scheme</summary>
+			<description>The color scheme: 'default' (system), 'light', or 'dark'</description>
+		</key>
 	</schema>
 </schemalist>

@@ -2,4 +2,5 @@ target/
 _build/
 builddir/
 .flatpak/
+.claude/
 src/config.rs

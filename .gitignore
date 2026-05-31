@@ -4,3 +4,4 @@ builddir/
 .flatpak/
 .claude/
 src/config.rs
+repo/

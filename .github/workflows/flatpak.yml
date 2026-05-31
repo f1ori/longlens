@@ -1,19 +1,15 @@
-on:
-  push:
-    branches: [main]
-  pull_request:
-name: CI
+name: Publish Flatpak
+on: { push: { branches: [main] } }
+permissions:
+  contents: read
+  packages: write
+  pages: write
+  id-token: write
 jobs:
-  flatpak:
-    name: "Flatpak"
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
-      options: --privileged
-    steps:
-    - uses: actions/checkout@v4
-    - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-      with:
-        bundle: longlens.flatpak
-        manifest-path: de.f1ori.longlens.json
-        cache-key: flatpak-builder-${{ github.sha }}
+  publish:
+    uses: aetherpak/actions/.github/workflows/publish.yml@v3
+    with:
+      manifest-path: de.f1ori.longlens.Devel.json
+      run-linter: false
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}

@@ -2,7 +2,6 @@ use std::cell::{Cell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::gio;
 use gtk::glib;
 
 mod imp {
@@ -22,7 +21,9 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
-        pub savebutton: TemplateChild<adw::SplitButton>,
+        pub saveandconnectbutton: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub saveonlybutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
         pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, String, bool) + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
@@ -49,8 +50,13 @@ mod imp {
         }
 
         #[template_callback]
-        fn handle_savebutton_clicked(&self, _button: &adw::SplitButton) {
+        fn handle_saveandconnectbutton_clicked(&self, _button: &gtk::Button) {
             self.handle_action();
+        }
+
+        #[template_callback]
+        fn handle_saveonlybutton_clicked(&self, _button: &gtk::Button) {
+            self.save_only();
         }
 
         fn form_values(&self) -> (String, String, String, String, bool) {
@@ -105,21 +111,17 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            let action_group = gio::SimpleActionGroup::new();
-            let save_only = gio::SimpleAction::new("save-only", None);
-            let obj = self.obj().clone();
-            save_only.connect_activate(move |_, _| obj.imp().save_only());
-            action_group.add_action(&save_only);
-            self.obj().insert_action_group("dialog", Some(&action_group));
-
-            self.savebutton.set_sensitive(false);
+            self.saveandconnectbutton.set_sensitive(false);
+            self.saveonlybutton.set_sensitive(false);
             self.hostnameentry.connect_notify_local(
                 Some("text"),
                 glib::clone!(
                     #[weak(rename_to = dialog)]
                     self,
                     move |entry, _| {
-                        dialog.savebutton.set_sensitive(!entry.text().is_empty());
+                        let sensitive = !entry.text().is_empty();
+                        dialog.saveandconnectbutton.set_sensitive(sensitive);
+                        dialog.saveonlybutton.set_sensitive(sensitive);
                     }
                 ),
             );

@@ -16,11 +16,17 @@ template $LongLensDestinationDialog: Adw.Dialog {
       }
 
       [end]
-      Adw.SplitButton savebutton {
+      Button saveandconnectbutton {
         label: _("Save & Connect");
-        clicked => $handle_savebutton_clicked() swapped;
+        clicked => $handle_saveandconnectbutton_clicked() swapped;
         styles ["suggested-action"]
-        menu-model: save_menu;
+      }
+
+      [end]
+      Button saveonlybutton {
+        icon-name: "document-save-symbolic";
+        tooltip-text: _("Only save");
+        clicked => $handle_saveonlybutton_clicked() swapped;
       }
     }
 
@@ -56,9 +62,3 @@ template $LongLensDestinationDialog: Adw.Dialog {
   }
 }
 
-menu save_menu {
-  item {
-    label: _("Save");
-    action: "dialog.save-only";
-  }
-}

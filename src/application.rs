@@ -27,7 +27,7 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::config::VERSION;
+use crate::config::{APP_ID, VERSION};
 use crate::destinations::Destinations;
 use crate::LongLensWindow;
 
@@ -54,7 +54,7 @@ mod imp {
                 .set(Rc::new(RefCell::new(Destinations::load())))
                 .expect("Could not set destinations");
             self.settings
-                .set(gio::Settings::new("de.f1ori.longlens"))
+                .set(gio::Settings::new(APP_ID))
                 .expect("Could not create settings");
             let obj = self.obj();
             obj.setup_gactions();
@@ -158,7 +158,7 @@ impl LongLensApplication {
         let window = self.active_window().unwrap();
         let about = adw::AboutDialog::builder()
             .application_name("Long Lens")
-            .application_icon("de.f1ori.longlens")
+            .application_icon(APP_ID)
             .developer_name("Florian Richter")
             .version(VERSION)
             .developers(vec!["Florian Richter"])

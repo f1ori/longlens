@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=longlens
 Exec=longlens
-Icon=de.f1ori.longlens
+Icon=@APP_ID@
 Terminal=false
 Type=Application
 Categories=Utility;

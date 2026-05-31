@@ -3,6 +3,7 @@ gnome = import('gnome')
 
 
 conf = configuration_data()
+conf.set_quoted('APP_ID', application_id)
 conf.set_quoted('VERSION', meson.project_version())
 conf.set_quoted('GETTEXT_PACKAGE', 'longlens')
 conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))

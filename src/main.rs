@@ -33,14 +33,11 @@ mod utils;
 use self::application::LongLensApplication;
 use self::window::LongLensWindow;
 
-use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use config::{APP_ID, GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use tracing_subscriber;
-
-
-const APP_ID: &str = "de.f1ori.longlens";
 
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()

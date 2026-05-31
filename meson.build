@@ -7,7 +7,14 @@ project('longlens', 'rust',
 i18n = import('i18n')
 gnome = import('gnome')
 
-
+profile = get_option('profile')
+if profile == 'development'
+  application_id = 'de.f1ori.longlens.Devel'
+  app_path = '/de/f1ori/longlens/Devel/'
+else
+  application_id = 'de.f1ori.longlens'
+  app_path = '/de/f1ori/longlens/'
+endif
 
 
 subdir('data')

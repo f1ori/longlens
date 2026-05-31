@@ -19,7 +19,7 @@ Also can be built with GNOME Builder
 
 ### VSCode and devcontainer
 
-    meson setup builddir --prefix=/workspaces/longlens/builddir/install
+    meson setup builddir --prefix=/workspaces/longlens/builddir/install/ -Dprofile=development
     meson compile -C builddir
     meson install -C builddir
     ./builddir/install/bin/longlens
@@ -28,7 +28,7 @@ Also can be built with GNOME Builder
 ### flatpak
 
     # Build using flatpak-builder
-    flatpak-builder --user --install --force-clean _flatpak_build de.f1ori.longlens.json
+    flatpak-builder --user --install --force-clean _flatpak_build de.f1ori.longlens.Devel.json
 
     # Run
-    flatpak run de.f1ori.longlens
+    flatpak run de.f1ori.longlens.Devel

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="longlens">
-	<schema id="de.f1ori.longlens" path="/de/f1ori/longlens/">
+	<schema id="@APP_ID@" path="@APP_PATH@">
 		<key name="color-scheme" type="s">
 			<default>'default'</default>
 			<summary>Color Scheme</summary>

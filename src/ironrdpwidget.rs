@@ -54,6 +54,7 @@ mod imp {
         texture: RefCell<Option<gdk::MemoryTexture>>,
         input_database: OnceCell<RefCell<ironrdp::input::Database>>,
         output_relay: OnceCell<async_channel::Sender<RdpOutputEvent>>,
+        resize_timeout: RefCell<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -415,6 +416,47 @@ mod imp {
     }
 
     impl WidgetImpl for IronRdpWidget {
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+
+            if self.state.get() != RdpState::Connected {
+                return;
+            }
+
+            if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
+                source_id.remove();
+            }
+
+            let Ok(width) = u16::try_from(width) else {
+                return;
+            };
+            let Ok(height) = u16::try_from(height) else {
+                return;
+            };
+            // let scale_factor = (self.obj().scale_factor() * 100) as u32;
+
+            let source_id = glib::timeout_add_local_once(
+                std::time::Duration::from_millis(500),
+                glib::clone!(
+                    #[weak(rename_to = imp)]
+                    self,
+                    move || {
+                        *imp.resize_timeout.borrow_mut() = None;
+                        if let Some(sender) = imp.input_sender.borrow().as_ref() {
+                            let _ = sender.send(RdpInputEvent::Resize {
+                                width,
+                                height,
+                                scale_factor: 100,
+                                physical_size: None,
+                            });
+                        }
+                    }
+                ),
+            );
+
+            *self.resize_timeout.borrow_mut() = Some(source_id);
+        }
+
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             if let Some(texture) = self.texture.borrow().as_ref() {
                 snapshot.append_texture(

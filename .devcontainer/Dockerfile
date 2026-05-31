@@ -12,5 +12,10 @@ RUN microdnf install -y --refresh \
     gtk4-devel \
     libadwaita-devel \
     rust-analyzer \
+    alsa-lib-devel \
+    gcc-c++ \
+    cmake \
+    sudo \
     && microdnf clean all \
-    && useradd -m -u 1000 vscode
+    && useradd -m -u 1000 vscode \
+    && echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/vscode

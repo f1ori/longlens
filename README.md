@@ -4,12 +4,12 @@
 
 > **Note**: Even though basic RDP sessions work, this is still work in progress
 
-A simple, minimal and modern RDP client for occasional use.
+A simple, minimal and modern RDP client
 
 * Minimal UI to manage a list of favorite connections
 * Minimal UI for remote session
 * Password stored in keyring
-* Based on GTK4/libadwaita/rust/IronRDP
+* Based on GTK4/libadwaita/Rust/IronRDP
 
 
 ## How to build

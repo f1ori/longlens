@@ -8,21 +8,8 @@ gettext-rs = { version = "0.7", features = ["gettext-system"] }
 gtk = { version = "0.11", package = "gtk4", features = ["v4_22"] }
 gdk = { version = "0.11", package = "gdk4", features = ["v4_22"] }
 adw = { version = "0.9.1", package = "libadwaita", features = ["v1_9"] }
-ironrdp = { version = "0.13", features = [
-    "session",
-    "input",
-    "graphics",
-    "dvc",
-    "svc",
-    "rdpdr",
-    "rdpsnd",
-    "cliprdr",
-    "displaycontrol",
-    "connector",
-] }
-ironrdp-core = { version = "0.1", features = ["alloc"] }
-ironrdp-tls = { version = "0.1", features = ["rustls"] }
-ironrdp-tokio = { version = "0.7", features = ["reqwest"] }
+ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "3905d177f2417d0e810b437d7e3ee0a7e954c6cc" }
+ironrdp = { git = "https://github.com/Devolutions/IronRDP", rev = "3905d177f2417d0e810b437d7e3ee0a7e954c6cc", features = ["input", "connector"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7" }
 softbuffer = "0.4"

@@ -26,7 +26,6 @@ mod destination_object;
 mod destinations;
 mod destinations_page;
 mod ironrdpwidget;
-mod rdpclient;
 mod window;
 mod utils;
 

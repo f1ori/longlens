@@ -190,7 +190,7 @@ mod imp {
                 };
 
                 rt.block_on(async move {
-                    tokio::spawn(async move {
+                    let relay_handle = tokio::spawn(async move {
                         while let Some(event) = output_rx.recv().await {
                             if relay_tx.send(event).await.is_err() {
                                 break;
@@ -199,6 +199,9 @@ mod imp {
                     });
 
                     client.run().await;
+                    // Wait for the relay to forward all remaining events (including Terminated)
+                    // before the runtime drops and cancels the task.
+                    let _ = relay_handle.await;
                 });
             });
         }

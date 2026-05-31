@@ -20,7 +20,10 @@
 
 use ironrdp_client::config::{ClipboardType, Config, Destination};
 use ironrdp_client::rdp::{DvcPipeProxyFactory, RdpClient, RdpInputEvent, RdpOutputEvent};
+use ironrdp::cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy};
+use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
 use ironrdp::connector::{self, Credentials};
+use crate::clipboard::{self as clip, ClientClipboardMessageProxy, GtkCliprdrBackendFactory};
 use ironrdp::pdu::gcc::KeyboardType;
 use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
 use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
@@ -55,6 +58,8 @@ mod imp {
         input_database: OnceCell<RefCell<ironrdp::input::Database>>,
         output_relay: OnceCell<async_channel::Sender<RdpOutputEvent>>,
         resize_timeout: RefCell<Option<glib::SourceId>>,
+        clipboard_context: OnceCell<clip::SharedClipboardContext>,
+        gtk_clipboard_tx: OnceCell<async_channel::Sender<String>>,
     }
 
     #[glib::object_subclass]
@@ -139,7 +144,7 @@ mod imp {
             let config = Config {
                 destination: Destination::from_parts(hostname, port),
                 connector: connector_config,
-                clipboard_type: ClipboardType::Disable,
+                clipboard_type: ClipboardType::Enable,
                 log_file: None,
                 gw: None,
                 kerberos_config: None,
@@ -152,7 +157,20 @@ mod imp {
             let (output_tx, mut output_rx) = tokio::sync::mpsc::channel::<RdpOutputEvent>(64);
             let dvc_factory = DvcPipeProxyFactory::new(input_tx.clone());
 
-            *self.input_sender.borrow_mut() = Some(input_tx);
+            *self.input_sender.borrow_mut() = Some(input_tx.clone());
+
+            // Wire up clipboard: update the shared context with the new connection's proxy.
+            let cliprdr_factory: Option<Box<dyn ironrdp::cliprdr::backend::CliprdrBackendFactory + Send>> =
+                if let (Some(ctx), Some(gtk_tx)) = (
+                    self.clipboard_context.get(),
+                    self.gtk_clipboard_tx.get(),
+                ) {
+                    let proxy = ClientClipboardMessageProxy::new(input_tx.clone());
+                    ctx.lock().unwrap().proxy = Some(proxy);
+                    Some(Box::new(GtkCliprdrBackendFactory::new(ctx.clone(), gtk_tx.clone())))
+                } else {
+                    None
+                };
 
             let relay_tx = self.output_relay.get().unwrap().clone();
 
@@ -167,7 +185,7 @@ mod imp {
                     config,
                     output_event_sender: output_tx,
                     input_event_receiver: input_rx,
-                    cliprdr_factory: None,
+                    cliprdr_factory,
                     dvc_pipe_proxy_factory: dvc_factory,
                 };
 
@@ -315,6 +333,72 @@ mod imp {
                     }
                 }
             ));
+
+            // Set up clipboard sharing.
+            let context = clip::new_shared_context();
+            self.clipboard_context.set(context.clone()).ok();
+
+            let (clip_tx, clip_rx) = async_channel::bounded::<String>(16);
+            self.gtk_clipboard_tx.set(clip_tx).ok();
+
+            // GTK task: receive text from remote and write it to the local clipboard.
+            glib::spawn_future_local(async move {
+                while let Ok(text) = clip_rx.recv().await {
+                    if let Some(display) = gdk::Display::default() {
+                        display.clipboard().set_text(&text);
+                    }
+                }
+            });
+
+            // Monitor local clipboard changes and forward to the remote.
+            if let Some(display) = gdk::Display::default() {
+                let context_for_clipboard = context.clone();
+                display.clipboard().connect_changed(move |cb| {
+                    let cb = cb.clone();
+                    let ctx = context_for_clipboard.clone();
+                    glib::spawn_future_local(async move {
+                        match cb.read_text_future().await {
+                            Ok(Some(text)) => {
+                                let should_skip = {
+                                    let mut c = ctx.lock().unwrap();
+                                    if c.last_remote_text.as_deref() == Some(text.as_str()) {
+                                        c.last_remote_text = None;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                };
+                                if should_skip {
+                                    return;
+                                }
+                                let utf16: Vec<u8> = text
+                                    .encode_utf16()
+                                    .flat_map(|c| c.to_le_bytes())
+                                    .chain([0u8, 0u8])
+                                    .collect();
+                                let proxy = {
+                                    let mut c = ctx.lock().unwrap();
+                                    c.local_text_utf16 = Some(utf16);
+                                    c.proxy.clone()
+                                };
+                                if let Some(proxy) = proxy {
+                                    proxy.send_clipboard_message(
+                                        ClipboardMessage::SendInitiateCopy(vec![
+                                            ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT),
+                                        ]),
+                                    );
+                                }
+                            }
+                            Ok(None) => {
+                                ctx.lock().unwrap().local_text_utf16 = None;
+                            }
+                            Err(e) => {
+                                debug!("Failed to read clipboard text: {e}");
+                            }
+                        }
+                    });
+                });
+            }
 
             let event_controller_motion = gtk::EventControllerMotion::new();
             event_controller_motion.connect_motion(glib::clone!(

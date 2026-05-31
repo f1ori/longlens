@@ -18,6 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+mod clipboard;
 mod destination_dialog;
 mod application;
 mod secrets;

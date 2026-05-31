@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
-gtk = { version = "0.10", package = "gtk4", features = ["v4_20"] }
-gdk = { version = "0.10", package = "gdk4", features = ["v4_20"] }
-adw = { version = "0.8", package = "libadwaita", features = ["v1_8"] }
+gtk = { version = "0.11", package = "gtk4", features = ["v4_22"] }
+gdk = { version = "0.11", package = "gdk4", features = ["v4_22"] }
+adw = { version = "0.9.1", package = "libadwaita", features = ["v1_9"] }
 ironrdp = { version = "0.13", features = [
     "session",
     "input",

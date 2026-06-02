@@ -96,19 +96,17 @@ mod imp {
     impl ObjectImpl for LongLensWindow {
         fn constructed(&self) {
             self.parent_constructed();
-            // bind page to connection state
-            self.rdpwidget
-                .bind_property::<gtk::Stack>("state", self.stack.as_ref(), "visible-child-name")
-                .transform_to(|_binding, value: glib::Value| {
-                    let state = value.get::<RdpState>().unwrap_or_default();
-                    Some(if state == RdpState::Connected {
-                        "rdppage"
-                    } else {
-                        "destinationspage"
-                    })
-                })
-                .sync_create()
-                .build();
+
+            fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
+                if state == RdpState::Connected {
+                    "rdppage"
+                } else if n_destinations == 0 {
+                    "emptypage"
+                } else {
+                    "destinationspage"
+                }
+            }
+
             self.rdpwidget
                 .bind_property::<gtk::Button>("state", self.disconnectbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
@@ -130,6 +128,8 @@ mod imp {
                 self,
                 move |widget| {
                     let obj = window.obj();
+                    let n = window.destinations_page.destinations().n_items();
+                    window.stack.set_visible_child_name(stack_page(widget.state(), n));
                     if widget.state() == RdpState::Connected {
                         let display_title = window.connection_display_title.borrow().clone();
                         obj.set_title(Some(&display_title));
@@ -142,6 +142,16 @@ mod imp {
                     }
                 }
             ));
+            self.destinations_page.destinations().connect_items_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |model, _, _, _| {
+                    let state = window.rdpwidget.state();
+                    window.stack.set_visible_child_name(stack_page(state, model.n_items()));
+                }
+            ));
+            // Set initial page (destinations model is empty until set_destinations is called)
+            self.stack.set_visible_child_name(stack_page(RdpState::default(), 0));
             self.obj().setup_actions();
         }
     }

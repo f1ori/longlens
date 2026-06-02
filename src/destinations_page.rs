@@ -102,7 +102,7 @@ glib::wrapper! {
 }
 
 impl LlDestinationPage {
-    fn destinations(&self) -> gio::ListStore {
+    pub fn destinations(&self) -> gio::ListStore {
         self.imp()
             .destinations
             .get()

@@ -34,10 +34,26 @@ template $LongLensWindow: Adw.ApplicationWindow {
       transition-type: slide_left_right;
 
       StackPage {
+        name: "emptypage";
+
+        child: Adw.StatusPage {
+          icon-name: "preferences-desktop-remote-desktop-symbolic";
+          title: _("No destinations");
+
+          child: Gtk.Button {
+            css-classes: ["suggested-action", "pill"];
+            // Translators: Big label button to create the first destination if none exists
+            label: _("Add Destination");
+            halign: center;
+            clicked => $handle_adddestinationbutton_clicked() swapped;
+          };
+        };
+      }
+
+      StackPage {
         name: "destinationspage";
 
         child: $LlDestinationPage destinations_page {
-          //rdpwidget: rdpwidget;
         };
       }
 

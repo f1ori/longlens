@@ -1,4 +1,8 @@
-# Long Lens
+<div id="longlens-logo" align="center">
+    <br />
+    <img src="data/icons/hicolor/scalable/apps/de.f1ori.longlens.svg" width="128" height="128" alt="Long Lens icon">
+    <h1>Long Lens</h1>
+</div>
 
 [![CI](https://github.com/f1ori/longlens/actions/workflows/flatpak.yml/badge.svg)](https://github.com/f1ori/longlens/actions/workflows/flatpak.yml)
 

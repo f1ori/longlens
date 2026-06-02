@@ -1,6 +1,11 @@
 scalable_dir = 'hicolor' / 'scalable' / 'apps'
+if profile == 'development'
+  scalable_icon = scalable_dir / 'de.f1ori.longlens.Devel.svg'
+else
+  scalable_icon = scalable_dir / 'de.f1ori.longlens.svg'
+endif
 install_data(
-  scalable_dir / 'de.f1ori.longlens.svg',
+  scalable_icon,
   install_dir: get_option('datadir') / 'icons' / scalable_dir,
   rename: application_id + '.svg',
 )

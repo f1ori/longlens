@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/de/f1ori/longlens">
     <file compressed="true" preprocess="xml-stripblanks">ui/destination_dialog.ui</file>
+    <file compressed="true" preprocess="xml-stripblanks">ui/destination_row.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/destinations_page.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/window.ui</file>
   </gresource>

@@ -20,6 +20,7 @@
 
 mod clipboard;
 mod destination_dialog;
+mod destination_row;
 mod application;
 mod secrets;
 mod config;

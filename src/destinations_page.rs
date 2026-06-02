@@ -26,6 +26,7 @@ use gtk::{gio, glib};
 
 use crate::destination_dialog::LongLensDestinationDialog;
 use crate::destination_object::{DestinationData, DestinationObject};
+use crate::destination_row::LlDestinationRow;
 use crate::destinations::Destinations;
 use crate::secrets;
 
@@ -164,11 +165,8 @@ impl LlDestinationPage {
         Some(uuid)
     }
 
-    fn create_destination_row(&self, destination_object: &DestinationObject) -> adw::ActionRow {
-        let row = adw::ActionRow::builder()
-            .activatable(true)
-            .selectable(false)
-            .build();
+    fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
+        let row = LlDestinationRow::new();
 
         destination_object
             .bind_property("display-title", &row, "title")
@@ -179,26 +177,12 @@ impl LlDestinationPage {
             .sync_create()
             .build();
 
-        let menu = gio::Menu::new();
-        menu.append(Some("Edit"), Some("row.edit"));
-        menu.append(Some("Delete"), Some("row.delete"));
-
-        let menu_button = gtk::MenuButton::builder()
-            .icon_name("view-more-symbolic")
-            .menu_model(&menu)
-            .valign(gtk::Align::Center)
-            .build();
-        menu_button.add_css_class("flat");
-
-        let action_group = gio::SimpleActionGroup::new();
-
-        let edit_action = gio::SimpleAction::new("edit", None);
-        edit_action.connect_activate(glib::clone!(
+        row.imp().edit_button.connect_clicked(glib::clone!(
             #[weak]
             destination_object,
             #[weak(rename_to = page)]
             self,
-            move |_, _| {
+            move |_| {
                 let destinations = page.imp().destinations_data.get().unwrap().clone();
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
@@ -256,15 +240,13 @@ impl LlDestinationPage {
                 dialog.present(Some(&page));
             }
         ));
-        action_group.add_action(&edit_action);
 
-        let delete_action = gio::SimpleAction::new("delete", None);
-        delete_action.connect_activate(glib::clone!(
+        row.imp().delete_button.connect_clicked(glib::clone!(
             #[weak]
             destination_object,
             #[weak(rename_to = page)]
             self,
-            move |_, _| {
+            move |_| {
                 let alert = adw::AlertDialog::new(
                     Some("Delete Destination?"),
                     Some("This action cannot be undone."),
@@ -307,10 +289,7 @@ impl LlDestinationPage {
                 alert.present(Some(&page));
             }
         ));
-        action_group.add_action(&delete_action);
 
-        row.insert_action_group("row", Some(&action_group));
-        row.add_suffix(&menu_button);
         row
     }
 

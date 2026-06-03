@@ -3,27 +3,29 @@ using Adw 1;
 
 
 template $LlDestinationPage: Adw.Bin {
-  ScrolledWindow {
-    hscrollbar-policy: never;
-    vexpand: true;
+  Adw.ToastOverlay toast_overlay {
+    ScrolledWindow {
+      hscrollbar-policy: never;
+      vexpand: true;
 
-    Adw.Clamp {
-      maximum-size: 400;
+      Adw.Clamp {
+        maximum-size: 400;
 
-      Box {
-        orientation: vertical;
-        margin-top: 24;
-        margin-bottom: 24;
-        margin-start: 12;
-        margin-end: 12;
-        spacing: 12;
+        Box {
+          orientation: vertical;
+          margin-top: 24;
+          margin-bottom: 24;
+          margin-start: 12;
+          margin-end: 12;
+          spacing: 12;
 
-        ListBox destinations_list {
-          row-activated => $handle_destinationslist_rowactivated() swapped;
+          ListBox destinations_list {
+            row-activated => $handle_destinationslist_rowactivated() swapped;
 
-          styles [
-            "boxed-list-separate",
-          ]
+            styles [
+              "boxed-list-separate",
+            ]
+          }
         }
       }
     }

@@ -16,6 +16,7 @@
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+use std::cell::Cell;
 use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -38,6 +39,8 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destinations_page.ui")]
     pub struct LlDestinationPage {
+        #[template_child]
+        pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         pub destinations_list: TemplateChild<gtk::ListBox>,
         pub destinations: OnceCell<gio::ListStore>,
@@ -247,46 +250,60 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             move |_| {
-                let alert = adw::AlertDialog::new(
-                    Some("Delete Destination?"),
-                    Some("This action cannot be undone."),
-                );
-                alert.add_response("cancel", "Cancel");
-                alert.add_response("delete", "Delete");
-                alert.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
-                alert.set_default_response(Some("cancel"));
-                alert.set_close_response("cancel");
+                let uuid = destination_object.uuid();
+                let model = page.destinations();
+                let pos = model
+                    .iter::<DestinationObject>()
+                    .enumerate()
+                    .find_map(|(i, obj)| {
+                        obj.ok().filter(|o| o.uuid() == uuid).map(|_| i as u32)
+                    });
+                if let Some(pos) = pos {
+                    let saved_data = Rc::new(destination_object.destination_data());
+                    model.remove(pos);
 
-                alert.connect_response(None, glib::clone!(
-                    #[weak]
-                    destination_object,
-                    #[weak]
-                    page,
-                    move |_, response| {
-                        if response == "delete" {
-                            let uuid = destination_object.uuid();
-                            secrets::delete_password(&uuid);
-                            let model = page.destinations();
-                            let pos = model
-                                .iter::<DestinationObject>()
-                                .enumerate()
-                                .find_map(|(i, obj)| {
-                                    obj.ok().filter(|o| o.uuid() == uuid).map(|_| i as u32)
-                                });
-                            if let Some(pos) = pos {
-                                model.remove(pos);
-                            }
-                            page.imp()
-                                .destinations_data
-                                .get()
-                                .unwrap()
-                                .borrow_mut()
-                                .remove(&uuid);
+                    let undone = Rc::new(Cell::new(false));
+                    let toast = adw::Toast::new("Destination deleted");
+                    toast.set_button_label(Some("Undo"));
+
+                    toast.connect_button_clicked(glib::clone!(
+                        #[weak]
+                        page,
+                        #[strong]
+                        undone,
+                        #[strong]
+                        saved_data,
+                        move |_| {
+                            undone.set(true);
+                            page.destinations().insert(
+                                pos,
+                                &DestinationObject::from_destination_data((*saved_data).clone()),
+                            );
                         }
-                    }
-                ));
+                    ));
 
-                alert.present(Some(&page));
+                    toast.connect_dismissed(glib::clone!(
+                        #[weak]
+                        page,
+                        #[strong]
+                        undone,
+                        #[strong]
+                        uuid,
+                        move |_| {
+                            if !undone.get() {
+                                secrets::delete_password(&uuid);
+                                page.imp()
+                                    .destinations_data
+                                    .get()
+                                    .unwrap()
+                                    .borrow_mut()
+                                    .remove(&uuid);
+                            }
+                        }
+                    ));
+
+                    page.imp().toast_overlay.add_toast(toast);
+                }
             }
         ));
 

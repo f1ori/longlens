@@ -88,6 +88,11 @@ mod imp {
 
             self.obj().set_state(RdpState::Connecting);
 
+            let (domain, username) = match username.split_once('\\') {
+                Some((d, u)) => (Some(d.to_owned()), u.to_owned()),
+                None => (None, username),
+            };
+
             let codecs: Vec<&str> = vec![];
             let codecs = match client_codecs_capabilities(&codecs) {
                 Ok(c) => c,
@@ -99,7 +104,7 @@ mod imp {
 
             let connector_config = connector::Config {
                 credentials: Credentials::UsernamePassword { username, password },
-                domain: None,
+                domain,
                 enable_tls: true,
                 enable_credssp: true,
                 keyboard_type: KeyboardType::IbmEnhanced,

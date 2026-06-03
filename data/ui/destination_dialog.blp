@@ -39,11 +39,13 @@ template $LongLensDestinationDialog: Adw.Dialog {
 
         Adw.EntryRow hostnameentry {
           title: _("Hostname");
+          tooltip-text: _("Hostname or Hostname:Port");
           entry-activated => $handle_entries_activated() swapped;
         }
 
         Adw.EntryRow usernameentry {
           title: _("Username");
+          tooltip-text: _("Username or Domain\\Username");
           entry-activated => $handle_entries_activated() swapped;
         }
 

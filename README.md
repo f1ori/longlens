@@ -10,6 +10,11 @@
 
 A simple, minimal, and modern RDP client
 
+<div align="center">
+  <img src="data/screenshots/screenshot1.png" width="45%" alt="Screenshot 1">
+  <img src="data/screenshots/screenshot2.png" width="45%" alt="Screenshot 2">
+</div>
+
 * Minimal UI to manage a list of favorite connections
 * Minimal UI for remote sessions
 * Passwords stored in keyring

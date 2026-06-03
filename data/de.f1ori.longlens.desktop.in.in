@@ -1,10 +1,10 @@
 [Desktop Entry]
-Name=longlens
+Name=Long Lons
 Exec=longlens
 Icon=@APP_ID@
 Terminal=false
 Type=Application
 Categories=Utility;
-Keywords=GTK;
+Keywords=RDP;Remote;Desktop;Client;GTK;Windows;Server;Connection
 StartupNotify=true
 DBusActivatable=true

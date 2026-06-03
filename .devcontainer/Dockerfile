@@ -16,6 +16,7 @@ RUN microdnf install -y --refresh \
     gcc-c++ \
     cmake \
     sudo \
+    git-lfs \
     && microdnf clean all \
     && useradd -m -u 1000 vscode \
     && echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/vscode

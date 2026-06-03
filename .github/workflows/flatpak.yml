@@ -11,7 +11,5 @@ jobs:
     with:
       manifest-path: de.f1ori.longlens.Devel.json
       run-linter: false
-      repo_title: "Long Lens Flatpak Repository"
-      footer_text: "<a href=\"https://github.com/f1ori/longlens\">Long Lens</a>"
     secrets:
       gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}

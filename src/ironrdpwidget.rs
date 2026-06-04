@@ -424,6 +424,37 @@ mod imp {
                     imp.send_input_operation(operation);
                 }
             ));
+            event_controller_motion.connect_enter(glib::clone!(
+                #[weak(rename_to=imp)]
+                self,
+                move |_controller, _x, _y| {
+                    if imp.state.get() != RdpState::Connected {
+                        return;
+                    }
+                    imp.obj().grab_focus();
+                    imp.obj()
+                        .root()
+                        .and_then(|r| r.surface())
+                        .as_ref()
+                        .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
+                        .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
+                }
+            ));
+            event_controller_motion.connect_leave(glib::clone!(
+                #[weak(rename_to=imp)]
+                self,
+                move |_controller| {
+                    imp.obj()
+                        .root()
+                        .and_then(|r| r.surface())
+                        .as_ref()
+                        .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
+                        .inspect(|t| t.restore_system_shortcuts());
+                    if let Some(root) = imp.obj().root() {
+                        root.set_focus(None::<&gtk::Widget>);
+                    }
+                }
+            ));
             self.obj().add_controller(event_controller_motion);
 
             let event_controller = gtk::EventControllerLegacy::new();

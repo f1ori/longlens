@@ -139,6 +139,10 @@ mod imp {
                             .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
                     } else {
                         obj.set_title(Some("Long Lens"));
+                        obj.surface()
+                            .as_ref()
+                            .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
+                            .inspect(|t| t.restore_system_shortcuts());
                     }
                 }
             ));

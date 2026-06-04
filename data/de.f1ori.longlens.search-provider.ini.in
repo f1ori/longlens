@@ -1,0 +1,6 @@
+[Shell Search Provider]
+DesktopId=@APP_ID@.desktop
+BusName=@APP_ID@
+ObjectPath=/de/f1ori/longlens/SearchProvider
+Version=2
+DefaultDisabled=false

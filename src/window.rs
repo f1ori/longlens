@@ -186,8 +186,10 @@ impl LongLensWindow {
                     parameter.unwrap().get().unwrap();
                 *window.imp().connection_display_title.borrow_mut() = display_title;
                 let (server, port) = parse_domain_port(&hostname);
-                let width = window.imp().stack.width() as u16;
-                let height = window.imp().stack.height() as u16;
+                let w = window.imp().stack.width();
+                let h = window.imp().stack.height();
+                let width = if w > 0 { w as u16 } else { 1280 };
+                let height = if h > 0 { h as u16 } else { 800 };
                 window.imp().rdpwidget
                     .connect_to_server(server, port, username, password, width, height);
             })

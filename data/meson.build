@@ -63,6 +63,16 @@ configure_file(
   install_dir: get_option('datadir') / 'dbus-1' / 'services'
 )
 
+search_provider_conf = configuration_data()
+search_provider_conf.set('APP_ID', application_id)
+configure_file(
+  input: 'de.f1ori.longlens.search-provider.ini.in',
+  output: application_id + '.search-provider.ini',
+  configuration: search_provider_conf,
+  install: true,
+  install_dir: get_option('datadir') / 'gnome-shell' / 'search-providers',
+)
+
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 
 blueprints = custom_target('blueprints',

@@ -19,6 +19,7 @@ A simple, minimal, and modern RDP client
 * Minimal UI for remote sessions
 * Passwords stored in keyring
 * Clipboard synchronization
+* GNOME Search Provider for destinations
 * Based on GTK4/libadwaita/Rust/IronRDP
 
 ## How to install

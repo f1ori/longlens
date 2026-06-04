@@ -19,8 +19,8 @@
  */
 
 use std::cell::OnceCell;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use gettextrs::gettext;
 use adw::prelude::*;
@@ -38,6 +38,7 @@ mod imp {
     pub struct LongLensApplication {
         pub destinations: OnceCell<Rc<RefCell<Destinations>>>,
         pub settings: OnceCell<gio::Settings>,
+        pub pending_connection: RefCell<Option<(String, String, String, String)>>,
     }
 
     #[glib::object_subclass]
@@ -66,6 +67,10 @@ mod imp {
             self.parent_startup();
             let scheme = self.settings.get().unwrap().string("color-scheme");
             super::LongLensApplication::apply_color_scheme(&scheme);
+
+            if let Some(conn) = self.obj().dbus_connection() {
+                crate::search_provider::register_search_provider(&conn, &self.obj());
+            }
         }
 
         // We connect to the activate callback to create a window when the application
@@ -74,15 +79,25 @@ mod imp {
         // to do that, we'll just present any existing window.
         fn activate(&self) {
             let application = self.obj();
-            // Get the current window or create one if necessary
-            let window = application.active_window().unwrap_or_else(|| {
+
+            if let Some(params) = self.pending_connection.borrow_mut().take() {
                 let window = LongLensWindow::new(&*application);
                 window.set_destinations(application.destinations());
-                window.upcast()
-            });
-
-            // Ask the window manager/compositor to present the window
-            window.present();
+                window.present();
+                let window_weak = window.downgrade();
+                glib::idle_add_local_once(move || {
+                    if let Some(w) = window_weak.upgrade() {
+                        let _ = gtk::prelude::WidgetExt::activate_action(&w, "win.connect", Some(&params.to_variant()));
+                    }
+                });
+            } else {
+                let window = application.active_window().unwrap_or_else(|| {
+                    let window = LongLensWindow::new(&*application);
+                    window.set_destinations(application.destinations());
+                    window.upcast()
+                });
+                window.present();
+            }
         }
     }
 

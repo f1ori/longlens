@@ -8,3 +8,8 @@ Categories=Utility;
 Keywords=RDP;Remote;Desktop;Client;GTK;Windows;Server;Connection
 StartupNotify=true
 DBusActivatable=true
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=longlens

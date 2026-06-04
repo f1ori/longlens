@@ -70,6 +70,13 @@ template $LongLensWindow: Adw.ApplicationWindow {
 
 menu primary_menu {
   section {
+    item {
+      action: "app.new-window";
+      label: _("_New Window");
+    }
+  }
+
+  section {
     submenu {
       label: _("_Theme");
 

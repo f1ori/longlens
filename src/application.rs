@@ -91,11 +91,8 @@ mod imp {
                     }
                 });
             } else {
-                let window = application.active_window().unwrap_or_else(|| {
-                    let window = LongLensWindow::new(&*application);
-                    window.set_destinations(application.destinations());
-                    window.upcast()
-                });
+                let window = LongLensWindow::new(&*application);
+                window.set_destinations(application.destinations());
                 window.present();
             }
         }
@@ -144,6 +141,9 @@ impl LongLensApplication {
         let about_action = gio::ActionEntry::builder("about")
             .activate(move |app: &Self, _, _| app.show_about())
             .build();
+        let new_window_action = gio::ActionEntry::builder("new-window")
+            .activate(move |app: &Self, _, _| app.activate())
+            .build();
 
         let initial_scheme = self.settings().string("color-scheme");
 
@@ -166,7 +166,7 @@ impl LongLensApplication {
         ));
         self.add_action(&color_scheme_action);
 
-        self.add_action_entries([quit_action, about_action]);
+        self.add_action_entries([quit_action, about_action, new_window_action]);
     }
 
     fn show_about(&self) {

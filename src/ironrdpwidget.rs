@@ -70,6 +70,14 @@ mod imp {
     }
 
     impl IronRdpWidget {
+        fn surface_scale(&self) -> f64 {
+            self.obj()
+                .native()
+                .and_then(|n| n.surface())
+                .map(|s| s.scale())
+                .unwrap_or_else(|| self.obj().scale_factor() as f64)
+        }
+
         pub fn connect_to_server(
             &self,
             hostname: String,
@@ -80,6 +88,10 @@ mod imp {
             height: u16,
         ) {
             info!("Connecting to {}:{} {}x{}", hostname, port, width, height);
+
+            let scale_f = self.surface_scale();
+            let phys_width = (width as f64 * scale_f).round() as u16;
+            let phys_height = (height as f64 * scale_f).round() as u16;
 
             // Gracefully close any existing connection
             if let Some(sender) = self.input_sender.borrow().as_ref() {
@@ -113,8 +125,8 @@ mod imp {
                 keyboard_functional_keys_count: 12,
                 ime_file_name: String::new(),
                 dig_product_id: String::new(),
-                desktop_size: connector::DesktopSize { width, height },
-                desktop_scale_factor: 0,
+                desktop_size: connector::DesktopSize { width: phys_width, height: phys_height },
+                desktop_scale_factor: (scale_f * 100.0).round() as u32,
                 bitmap: Some(connector::BitmapConfig {
                     color_depth: 32,
                     lossy_compression: true,
@@ -243,19 +255,17 @@ mod imp {
                         info!("State connected (first frame received)");
                         self.obj().set_state(RdpState::Connected);
                     }
-                    // ironrdp encodes pixels as 0x00RRGGBB (big-endian [0, r, g, b])
+                    // ironrdp encodes pixels as 0x00RRGGBB; on little-endian this is [B, G, R, 0x00] in memory,
+                    // matching B8g8r8x8 directly.
                     let byte_buf: Vec<u8> = buffer
                         .into_iter()
-                        .flat_map(|p| {
-                            let [_, r, g, b] = p.to_be_bytes();
-                            [r, g, b, 0xFF]
-                        })
+                        .flat_map(u32::to_ne_bytes)
                         .collect();
                     let bytes = glib::Bytes::from_owned(byte_buf);
                     *self.texture.borrow_mut() = Some(gdk::MemoryTexture::new(
                         width.get().into(),
                         height.get().into(),
-                        gdk::MemoryFormat::R8g8b8a8,
+                        gdk::MemoryFormat::B8g8r8x8,
                         &bytes,
                         (width.get() as usize) * 4,
                     ));
@@ -274,20 +284,36 @@ mod imp {
                 }
                 RdpOutputEvent::PointerBitmap(pointer) => {
                     debug!(width = ?pointer.width, height = ?pointer.height, "Received pointer bitmap");
+                    let tex_w = pointer.width as i32;
+                    let tex_h = pointer.height as i32;
+                    let hotspot_x = pointer.hotspot_x as i32;
+                    let hotspot_y = pointer.hotspot_y as i32;
                     let bitmap_bytes = glib::Bytes::from_owned(pointer.bitmap_data.clone());
                     let texture = gdk::MemoryTexture::new(
-                        pointer.width.into(),
-                        pointer.height.into(),
+                        tex_w, tex_h,
                         gdk::MemoryFormat::R8g8b8a8,
                         &bitmap_bytes,
-                        (pointer.width as usize) * 4,
+                        (tex_w as usize) * 4,
                     );
-                    let cursor = gdk::Cursor::from_texture(
-                        &texture,
-                        pointer.hotspot_x.into(),
-                        pointer.hotspot_y.into(),
+                    // from_callback lets GTK pass width/height as logical pixels so the
+                    // cursor is displayed at the correct size on HiDPI displays.
+                    let cursor = gdk::Cursor::from_callback(
+                        move |_cursor, _cursor_size, scale, width, height, hx, hy| {
+                            *width = (tex_w as f64 / scale).round() as i32;
+                            *height = (tex_h as f64 / scale).round() as i32;
+                            *hx = hotspot_x;
+                            *hy = hotspot_y;
+                            let t = texture.clone().upcast::<gdk::Texture>();
+                            // The gtk4-rs binding uses to_glib_none (no ref bump) but
+                            // GdkCursorGetTextureCallback has transfer:full semantics —
+                            // GTK calls g_object_unref on the returned pointer. Leaking
+                            // one clone here provides the extra ref GTK will consume,
+                            // keeping the closure's own reference intact.
+                            std::mem::forget(t.clone());
+                            t
+                        },
                         None,
-                    );
+                    ).unwrap();
                     self.obj().set_cursor(Some(&cursor));
                 }
             }
@@ -416,10 +442,11 @@ mod imp {
                     if imp.state.get() != RdpState::Connected {
                         return;
                     }
+                    let scale = imp.surface_scale();
                     let operation =
                         ironrdp::input::Operation::MouseMove(ironrdp::input::MousePosition {
-                            x: x as u16,
-                            y: y as u16,
+                            x: (x * scale) as u16,
+                            y: (y * scale) as u16,
                         });
                     imp.send_input_operation(operation);
                 }
@@ -550,14 +577,6 @@ mod imp {
                 source_id.remove();
             }
 
-            let Ok(width) = u16::try_from(width) else {
-                return;
-            };
-            let Ok(height) = u16::try_from(height) else {
-                return;
-            };
-            // let scale_factor = (self.obj().scale_factor() * 100) as u32;
-
             let source_id = glib::timeout_add_local_once(
                 std::time::Duration::from_millis(500),
                 glib::clone!(
@@ -565,11 +584,21 @@ mod imp {
                     self,
                     move || {
                         *imp.resize_timeout.borrow_mut() = None;
+                        let scale_f = imp.surface_scale();
+                        let phys_width_i = (width as f64 * scale_f).round() as i32;
+                        let phys_height_i = (height as f64 * scale_f).round() as i32;
+                        let (Ok(phys_width), Ok(phys_height)) = (
+                            u16::try_from(phys_width_i),
+                            u16::try_from(phys_height_i),
+                        ) else {
+                            return;
+                        };
+                        let scale_factor = (scale_f * 100.0).round() as u32;
                         if let Some(sender) = imp.input_sender.borrow().as_ref() {
                             let _ = sender.send(RdpInputEvent::Resize {
-                                width,
-                                height,
-                                scale_factor: 100,
+                                width: phys_width,
+                                height: phys_height,
+                                scale_factor,
                                 physical_size: None,
                             });
                         }
@@ -581,20 +610,17 @@ mod imp {
         }
 
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            let w = self.obj().width() as f32;
+            let h = self.obj().height() as f32;
             if let Some(texture) = self.texture.borrow().as_ref() {
                 snapshot.append_texture(
                     texture,
-                    &gtk::graphene::Rect::new(
-                        0.0,
-                        0.0,
-                        texture.width() as f32,
-                        texture.height() as f32,
-                    ),
+                    &gtk::graphene::Rect::new(0.0, 0.0, w, h),
                 );
             } else {
                 snapshot.append_color(
                     &gdk::RGBA::BLACK,
-                    &gtk::graphene::Rect::new(0.0, 0.0, 100.0, 100.0),
+                    &gtk::graphene::Rect::new(0.0, 0.0, w, h),
                 );
             }
 

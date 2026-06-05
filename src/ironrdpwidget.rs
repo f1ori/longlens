@@ -36,6 +36,25 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 
+/// Wraps the framebuffer so it can be handed to `glib::Bytes::from_owned`
+/// without copying. ironrdp encodes pixels as `0x00RRGGBB`, which on
+/// little-endian is `[B, G, R, 0x00]` in memory — exactly `B8g8r8x8` — so the
+/// `u32` slice can be reinterpreted as bytes directly.
+struct PixelBytes(Vec<u32>);
+
+impl AsRef<[u8]> for PixelBytes {
+    fn as_ref(&self) -> &[u8] {
+        // SAFETY: the slice is valid for `len * 4` bytes, `u32` is suitably
+        // aligned for `u8`, and every byte pattern is a valid `u8`.
+        unsafe {
+            std::slice::from_raw_parts(
+                self.0.as_ptr() as *const u8,
+                std::mem::size_of_val(self.0.as_slice()),
+            )
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
 #[enum_type(name = "RdpState")]
 pub enum RdpState {
@@ -255,13 +274,9 @@ mod imp {
                         info!("State connected (first frame received)");
                         self.obj().set_state(RdpState::Connected);
                     }
-                    // ironrdp encodes pixels as 0x00RRGGBB; on little-endian this is [B, G, R, 0x00] in memory,
-                    // matching B8g8r8x8 directly.
-                    let byte_buf: Vec<u8> = buffer
-                        .into_iter()
-                        .flat_map(u32::to_ne_bytes)
-                        .collect();
-                    let bytes = glib::Bytes::from_owned(byte_buf);
+                    // Reinterpret the framebuffer as bytes without copying
+                    // (the layout already matches B8g8r8x8; see PixelBytes).
+                    let bytes = glib::Bytes::from_owned(PixelBytes(buffer));
                     *self.texture.borrow_mut() = Some(gdk::MemoryTexture::new(
                         width.get().into(),
                         height.get().into(),
@@ -363,7 +378,33 @@ mod imp {
                 self,
                 async move {
                     while let Ok(event) = relay_rx.recv().await {
-                        imp.process_message(event);
+                        // Coalesce a burst of events. The library emits a full
+                        // framebuffer per graphics update, so when several have
+                        // queued up only the most recent Image is worth
+                        // painting — processing stale frames just burdens the
+                        // UI thread. Keep only the latest pending Image, but
+                        // flush it before any non-image event so ordering
+                        // (pointer moves, termination) is preserved.
+                        let mut pending_image: Option<RdpOutputEvent> = None;
+                        let mut event = Some(event);
+                        loop {
+                            let ev = event.take().unwrap();
+                            if matches!(ev, RdpOutputEvent::Image { .. }) {
+                                pending_image = Some(ev);
+                            } else {
+                                if let Some(img) = pending_image.take() {
+                                    imp.process_message(img);
+                                }
+                                imp.process_message(ev);
+                            }
+                            match relay_rx.try_recv() {
+                                Ok(next) => event = Some(next),
+                                Err(_) => break,
+                            }
+                        }
+                        if let Some(img) = pending_image.take() {
+                            imp.process_message(img);
+                        }
                     }
                 }
             ));

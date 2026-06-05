@@ -1,4 +1,5 @@
 use secret_service::{EncryptionType, SecretService};
+use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 fn make_attrs(uuid: &str) -> HashMap<&str, &str> {
@@ -15,9 +16,9 @@ pub fn is_available() -> bool {
         })
 }
 
-pub fn store_password(uuid: &str, password: &str) {
+pub fn store_password(uuid: &str, password: &SecretString) {
     let uuid = uuid.to_owned();
-    let password = password.to_owned();
+    let password_bytes = password.expose_secret().as_bytes().to_owned();
     let _ = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -30,7 +31,7 @@ pub fn store_password(uuid: &str, password: &str) {
                 .create_item(
                     &format!("LongLens: {}", uuid),
                     make_attrs(&uuid),
-                    password.as_bytes(),
+                    &password_bytes,
                     true,
                     "text/plain",
                 )
@@ -39,7 +40,7 @@ pub fn store_password(uuid: &str, password: &str) {
         });
 }
 
-pub fn get_password(uuid: &str) -> Option<String> {
+pub fn get_password(uuid: &str) -> Option<SecretString> {
     let uuid = uuid.to_owned();
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -51,7 +52,7 @@ pub fn get_password(uuid: &str) -> Option<String> {
             collection.ensure_unlocked().await.ok()?;
             let items = collection.search_items(make_attrs(&uuid)).await.ok()?;
             let secret = items.first()?.get_secret().await.ok()?;
-            String::from_utf8(secret).ok()
+            String::from_utf8(secret).ok().map(SecretString::new)
         })
 }
 

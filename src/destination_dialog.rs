@@ -3,6 +3,7 @@ use std::cell::{Cell, RefCell};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::glib;
+use secrecy::{ExposeSecret, SecretString};
 
 mod imp {
     use super::*;
@@ -25,7 +26,7 @@ mod imp {
         #[template_child]
         pub saveonlybutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
-        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, String, bool) + 'static>>>,
+        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool) + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
     }
 
@@ -59,12 +60,12 @@ mod imp {
             self.save_only();
         }
 
-        fn form_values(&self) -> (String, String, String, String, bool) {
+        fn form_values(&self) -> (String, String, String, SecretString, bool) {
             (
                 self.nameentry.text().to_string(),
                 self.hostnameentry.text().to_string(),
                 self.usernameentry.text().to_string(),
-                self.passwordentry.text().to_string(),
+                SecretString::new(self.passwordentry.text().to_string()),
                 self.rememberpasswordswitch.is_active(),
             )
         }
@@ -79,11 +80,12 @@ mod imp {
 
         fn handle_action(&self) {
             let (name, hostname, username, password, remember) = self.form_values();
+            let password_str = password.expose_secret().clone();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(name.clone(), hostname.clone(), username.clone(), password.clone(), remember);
+                on_save(name.clone(), hostname.clone(), username.clone(), password, remember);
             }
             let display_title = if name.is_empty() { hostname.clone() } else { name };
-            let variant = (hostname, username, password, display_title).to_variant();
+            let variant = (hostname, username, password_str, display_title).to_variant();
             self.obj()
                 .activate_action("win.connect", Some(&variant))
                 .expect("win.connect action failed");
@@ -175,7 +177,7 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(String, String, String, String, bool) + 'static,
+        callback: impl Fn(String, String, String, SecretString, bool) + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
@@ -196,8 +198,8 @@ impl LongLensDestinationDialog {
         self.imp().usernameentry.text().to_string()
     }
 
-    pub fn password(&self) -> String {
-        self.imp().passwordentry.text().to_string()
+    pub fn password(&self) -> SecretString {
+        SecretString::new(self.imp().passwordentry.text().to_string())
     }
 
     pub fn remember_password(&self) -> bool {

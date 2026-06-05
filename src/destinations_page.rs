@@ -25,6 +25,8 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use secrecy::ExposeSecret;
+
 use crate::destination_dialog::LongLensDestinationDialog;
 use crate::destination_object::{DestinationData, DestinationObject};
 use crate::destination_row::LlDestinationRow;
@@ -57,9 +59,12 @@ mod imp {
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
                 .expect("The object needs to be a `DestinationObject`.");
-            let password = secrets::get_password(&destination.uuid()).unwrap_or_default();
+            let password_str = secrets::get_password(&destination.uuid())
+                .as_ref()
+                .map(|p| p.expose_secret().clone())
+                .unwrap_or_default();
             let display_title = destination.property::<String>("display-title");
-            let variant = (destination.hostname(), destination.username(), password, display_title).to_variant();
+            let variant = (destination.hostname(), destination.username(), password_str, display_title).to_variant();
             self.obj()
                 .activate_action("win.connect", Some(&variant))
                 .expect("win.connect action failed");
@@ -193,7 +198,7 @@ impl LlDestinationPage {
                 dialog.imp().usernameentry.set_text(&destination_object.username());
                 // Pre-fill stored password if available
                 if let Some(pw) = secrets::get_password(&destination_object.uuid()) {
-                    dialog.imp().passwordentry.set_text(&pw);
+                    dialog.imp().passwordentry.set_text(pw.expose_secret());
                 } else {
                     dialog.imp().rememberpasswordswitch.set_active(false);
                 }
@@ -207,7 +212,7 @@ impl LlDestinationPage {
                         destination_object.set_username(username.clone());
                         destinations.borrow_mut().update(&destination_object.uuid(), name, hostname, username);
                         let uuid = destination_object.uuid();
-                        if remember && !password.is_empty() {
+                        if remember && !password.expose_secret().is_empty() {
                             secrets::store_password(&uuid, &password);
                         } else {
                             secrets::delete_password(&uuid);
@@ -317,7 +322,7 @@ impl LlDestinationPage {
             self,
             move |name, hostname, username, password, remember| {
                 if let Some(uuid) = page.add_destination(name, hostname, username) {
-                    if remember && !password.is_empty() {
+                    if remember && !password.expose_secret().is_empty() {
                         secrets::store_password(&uuid, &password);
                     }
                 }

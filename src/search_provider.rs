@@ -118,25 +118,8 @@ pub fn register_search_provider(connection: &gio::DBusConnection, app: &LongLens
                     "ActivateResult" => {
                         let identifier: String =
                             params.child_value(0).get().unwrap_or_default();
-                        let destinations = Destinations::load();
-
-                        if let Some(dest) = destinations.items().iter().find(|d| d.uuid == identifier) {
-                            let password =
-                                crate::secrets::get_password(&dest.uuid).unwrap_or_default();
-                            let display_name = if dest.name.is_empty() {
-                                dest.hostname.clone()
-                            } else {
-                                dest.name.clone()
-                            };
-                            app.imp().pending_connection.replace(Some((
-                                dest.hostname.clone(),
-                                dest.username.clone(),
-                                password,
-                                display_name,
-                            )));
-                            app.activate();
-                        }
-
+                        app.imp().pending_connection.replace(Some(identifier));
+                        app.activate();
                         invocation.return_value(Some(&().to_variant()));
                     }
                     "LaunchSearch" => {

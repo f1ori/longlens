@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::glib;
+use secrecy::SecretString;
 
 mod imp {
     use super::*;
@@ -14,7 +15,7 @@ mod imp {
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
         pub passwordgroup: TemplateChild<adw::PreferencesGroup>,
-        pub on_connect: RefCell<Option<Box<dyn Fn(String) + 'static>>>,
+        pub on_connect: RefCell<Option<Box<dyn Fn(SecretString) + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensPasswordDialog {
@@ -41,7 +42,7 @@ mod imp {
         }
 
         fn do_connect(&self) {
-            let password = self.passwordentry.text().to_string();
+            let password = SecretString::new(self.passwordentry.text().to_string());
             if let Some(on_connect) = self.on_connect.borrow().as_ref() {
                 on_connect(password);
             }
@@ -92,7 +93,7 @@ impl LongLensPasswordDialog {
         self.imp().passwordgroup.set_description(Some(name));
     }
 
-    pub fn set_on_connect(&self, callback: impl Fn(String) + 'static) {
+    pub fn set_on_connect(&self, callback: impl Fn(SecretString) + 'static) {
         *self.imp().on_connect.borrow_mut() = Some(Box::new(callback));
     }
 }

@@ -27,6 +27,8 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use secrecy::ExposeSecret;
+
 use crate::config::{APP_ID, VERSION};
 use crate::destinations::Destinations;
 use crate::LongLensWindow;
@@ -38,7 +40,7 @@ mod imp {
     pub struct LongLensApplication {
         pub destinations: OnceCell<Rc<RefCell<Destinations>>>,
         pub settings: OnceCell<gio::Settings>,
-        pub pending_connection: RefCell<Option<(String, String, String, String)>>,
+        pub pending_connection: RefCell<Option<String>>,
     }
 
     #[glib::object_subclass]
@@ -80,16 +82,30 @@ mod imp {
         fn activate(&self) {
             let application = self.obj();
 
-            if let Some(params) = self.pending_connection.borrow_mut().take() {
+            if let Some(uuid) = self.pending_connection.borrow_mut().take() {
                 let window = LongLensWindow::new(&*application);
                 window.set_destinations(application.destinations());
                 window.present();
-                let window_weak = window.downgrade();
-                glib::idle_add_local_once(move || {
-                    if let Some(w) = window_weak.upgrade() {
-                        let _ = gtk::prelude::WidgetExt::activate_action(&w, "win.connect", Some(&params.to_variant()));
-                    }
-                });
+                let destinations = application.destinations();
+                let destinations = destinations.borrow();
+                if let Some(dest) = destinations.items().iter().find(|d| d.uuid == uuid) {
+                    let password_str = crate::secrets::get_password(&dest.uuid)
+                        .as_ref()
+                        .map(|p| p.expose_secret().clone())
+                        .unwrap_or_default();
+                    let display_name = if dest.name.is_empty() {
+                        dest.hostname.clone()
+                    } else {
+                        dest.name.clone()
+                    };
+                    let params = (dest.hostname.clone(), dest.username.clone(), password_str, display_name);
+                    let window_weak = window.downgrade();
+                    glib::idle_add_local_once(move || {
+                        if let Some(w) = window_weak.upgrade() {
+                            let _ = gtk::prelude::WidgetExt::activate_action(&w, "win.connect", Some(&params.to_variant()));
+                        }
+                    });
+                }
             } else {
                 let window = LongLensWindow::new(&*application);
                 window.set_destinations(application.destinations());

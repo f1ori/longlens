@@ -21,6 +21,7 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
+use secrecy::{ExposeSecret, SecretString};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -187,9 +188,10 @@ impl LongLensWindow {
         let action_connect = gio::ActionEntry::builder("connect")
             .parameter_type(Some(glib::VariantTy::new("(ssss)").unwrap()))
             .activate(move |window: &Self, _action, parameter| {
-                let (hostname, username, password, display_title): (String, String, String, String) =
+                let (hostname, username, password_str, display_title): (String, String, String, String) =
                     parameter.unwrap().get().unwrap();
-                if password.is_empty() {
+                let password = SecretString::new(password_str);
+                if password.expose_secret().is_empty() {
                     let dialog = LongLensPasswordDialog::new();
                     dialog.set_destination_name(&display_title);
                     dialog.set_on_connect(glib::clone!(
@@ -208,7 +210,7 @@ impl LongLensWindow {
         self.add_action_entries([action_connect]);
     }
 
-    fn start_connection(&self, hostname: String, username: String, password: String, display_title: String) {
+    fn start_connection(&self, hostname: String, username: String, password: SecretString, display_title: String) {
         *self.imp().connection_display_title.borrow_mut() = display_title;
         let (server, port) = parse_domain_port(&hostname);
         let w = self.imp().stack.width();

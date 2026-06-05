@@ -23,6 +23,7 @@ use ironrdp_client::rdp::{DvcPipeProxyFactory, RdpClient, RdpInputEvent, RdpOutp
 use ironrdp::cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy};
 use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
 use ironrdp::connector::{self, Credentials};
+use secrecy::ExposeSecret;
 use crate::clipboard::{self as clip, ClientClipboardMessageProxy, GtkCliprdrBackendFactory};
 use ironrdp::pdu::gcc::KeyboardType;
 use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
@@ -102,7 +103,7 @@ mod imp {
             hostname: String,
             port: u16,
             username: String,
-            password: String,
+            password: secrecy::SecretString,
             width: u16,
             height: u16,
         ) {
@@ -134,7 +135,7 @@ mod imp {
             };
 
             let connector_config = connector::Config {
-                credentials: Credentials::UsernamePassword { username, password },
+                credentials: Credentials::UsernamePassword { username, password: password.expose_secret().clone() },
                 domain,
                 enable_tls: true,
                 enable_credssp: true,
@@ -656,7 +657,7 @@ impl IronRdpWidget {
         hostname: String,
         port: u16,
         username: String,
-        password: String,
+        password: secrecy::SecretString,
         width: u16,
         height: u16,
     ) {

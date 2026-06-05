@@ -378,33 +378,7 @@ mod imp {
                 self,
                 async move {
                     while let Ok(event) = relay_rx.recv().await {
-                        // Coalesce a burst of events. The library emits a full
-                        // framebuffer per graphics update, so when several have
-                        // queued up only the most recent Image is worth
-                        // painting — processing stale frames just burdens the
-                        // UI thread. Keep only the latest pending Image, but
-                        // flush it before any non-image event so ordering
-                        // (pointer moves, termination) is preserved.
-                        let mut pending_image: Option<RdpOutputEvent> = None;
-                        let mut event = Some(event);
-                        loop {
-                            let ev = event.take().unwrap();
-                            if matches!(ev, RdpOutputEvent::Image { .. }) {
-                                pending_image = Some(ev);
-                            } else {
-                                if let Some(img) = pending_image.take() {
-                                    imp.process_message(img);
-                                }
-                                imp.process_message(ev);
-                            }
-                            match relay_rx.try_recv() {
-                                Ok(next) => event = Some(next),
-                                Err(_) => break,
-                            }
-                        }
-                        if let Some(img) = pending_image.take() {
-                            imp.process_message(img);
-                        }
+                        imp.process_message(event);
                     }
                 }
             ));

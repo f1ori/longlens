@@ -3,7 +3,7 @@ use std::cell::{Cell, RefCell};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::glib;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
 mod imp {
     use super::*;
@@ -26,7 +26,7 @@ mod imp {
         #[template_child]
         pub saveonlybutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
-        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool) + 'static>>>,
+        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool) -> Option<String> + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
     }
 
@@ -80,15 +80,13 @@ mod imp {
 
         fn handle_action(&self) {
             let (name, hostname, username, password, remember) = self.form_values();
-            let password_str = password.expose_secret().clone();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(name.clone(), hostname.clone(), username.clone(), password, remember);
+                if let Some(uuid) = on_save(name, hostname, username, password, remember) {
+                    self.obj()
+                        .activate_action("win.connect", Some(&uuid.to_variant()))
+                        .expect("win.connect action failed");
+                }
             }
-            let display_title = if name.is_empty() { hostname.clone() } else { name };
-            let variant = (hostname, username, password_str, display_title).to_variant();
-            self.obj()
-                .activate_action("win.connect", Some(&variant))
-                .expect("win.connect action failed");
             self.obj().close();
         }
     }
@@ -177,7 +175,7 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(String, String, String, SecretString, bool) + 'static,
+        callback: impl Fn(String, String, String, SecretString, bool) -> Option<String> + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }

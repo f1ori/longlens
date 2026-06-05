@@ -21,11 +21,12 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::destination_object::DestinationObject;
 use crate::destinations::Destinations;
 use crate::ironrdpwidget::{IronRdpWidget, RdpState};
 use crate::destinations_page::LlDestinationPage;
@@ -186,24 +187,36 @@ impl LongLensWindow {
 
     fn setup_actions(&self) {
         let action_connect = gio::ActionEntry::builder("connect")
-            .parameter_type(Some(glib::VariantTy::new("(ssss)").unwrap()))
+            .parameter_type(Some(glib::VariantTy::new("s").unwrap()))
             .activate(move |window: &Self, _action, parameter| {
-                let (hostname, username, password_str, display_title): (String, String, String, String) =
-                    parameter.unwrap().get().unwrap();
-                let password = SecretString::new(password_str);
-                if password.expose_secret().is_empty() {
-                    let dialog = LongLensPasswordDialog::new();
-                    dialog.set_destination_name(&display_title);
-                    dialog.set_on_connect(glib::clone!(
-                        #[weak]
-                        window,
-                        move |password| {
-                            window.start_connection(hostname.clone(), username.clone(), password, display_title.clone());
-                        }
-                    ));
-                    dialog.present(Some(window));
-                } else {
-                    window.start_connection(hostname, username, password, display_title);
+                let uuid: String = parameter.unwrap().get().unwrap();
+                let destinations = window.imp().destinations_page.destinations();
+                let Some(dest) = destinations
+                    .iter::<DestinationObject>()
+                    .filter_map(|r| r.ok())
+                    .find(|d| d.uuid() == uuid)
+                else {
+                    return;
+                };
+                let hostname = dest.hostname();
+                let username = dest.username();
+                let display_title = dest.property::<String>("display-title");
+                match crate::secrets::get_password(&uuid) {
+                    Some(password) => {
+                        window.start_connection(hostname, username, password, display_title);
+                    }
+                    None => {
+                        let dialog = LongLensPasswordDialog::new();
+                        dialog.set_destination_name(&display_title);
+                        dialog.set_on_connect(glib::clone!(
+                            #[weak]
+                            window,
+                            move |password| {
+                                window.start_connection(hostname.clone(), username.clone(), password, display_title.clone());
+                            }
+                        ));
+                        dialog.present(Some(window));
+                    }
                 }
             })
             .build();

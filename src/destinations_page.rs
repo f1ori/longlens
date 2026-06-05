@@ -59,14 +59,8 @@ mod imp {
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
                 .expect("The object needs to be a `DestinationObject`.");
-            let password_str = secrets::get_password(&destination.uuid())
-                .as_ref()
-                .map(|p| p.expose_secret().clone())
-                .unwrap_or_default();
-            let display_title = destination.property::<String>("display-title");
-            let variant = (destination.hostname(), destination.username(), password_str, display_title).to_variant();
             self.obj()
-                .activate_action("win.connect", Some(&variant))
+                .activate_action("win.connect", Some(&destination.uuid().to_variant()))
                 .expect("win.connect action failed");
         }
 
@@ -206,6 +200,7 @@ impl LlDestinationPage {
                 dialog.set_on_save(glib::clone!(
                     #[weak]
                     destination_object,
+                    #[upgrade_or_default]
                     move |name, hostname, username, password, remember| {
                         destination_object.set_name(name.clone());
                         destination_object.set_hostname(hostname.clone());
@@ -217,6 +212,7 @@ impl LlDestinationPage {
                         } else {
                             secrets::delete_password(&uuid);
                         }
+                        Some(uuid)
                     }
                 ));
                 dialog.set_on_delete(glib::clone!(
@@ -320,11 +316,15 @@ impl LlDestinationPage {
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = page)]
             self,
+            #[upgrade_or_default]
             move |name, hostname, username, password, remember| {
                 if let Some(uuid) = page.add_destination(name, hostname, username) {
                     if remember && !password.expose_secret().is_empty() {
                         secrets::store_password(&uuid, &password);
                     }
+                    Some(uuid)
+                } else {
+                    None
                 }
             }
         ));

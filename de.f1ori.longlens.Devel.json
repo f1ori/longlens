@@ -42,7 +42,8 @@
             "builddir" : true,
             "buildsystem" : "meson",
             "config-opts" : [
-                "-Dprofile=development"
+                "-Dprofile=development",
+                "--buildtype=release"
             ],
             "sources" : [
                 {

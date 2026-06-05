@@ -9,7 +9,7 @@
                 "env": {
                     "GSETTINGS_SCHEMA_DIR": "${workspaceFolder}/builddir/install/share/glib-2.0/schemas",
                     "RUST_BACKTRACE": "1",
-                    "RUST_LOG": "longlens=debug"
+                    "RUST_LOG": "longlens=debug,ironrdp=debug"
                 }
             },
             "group": {

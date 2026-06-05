@@ -130,7 +130,9 @@ mod imp {
                 #[weak(rename_to = dialog)]
                 self,
                 move |switch| {
-                    if !switch.is_active() {
+                    let active = switch.is_active();
+                    dialog.passwordentry.set_sensitive(active);
+                    if !active {
                         dialog.passwordentry.set_text("");
                     }
                 }
@@ -143,6 +145,7 @@ mod imp {
                 if !available {
                     dialog.imp().rememberpasswordswitch.set_active(false);
                 }
+                dialog.imp().passwordentry.set_sensitive(dialog.imp().rememberpasswordswitch.is_active());
             });
         }
     }

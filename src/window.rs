@@ -28,6 +28,7 @@ use std::rc::Rc;
 use crate::destinations::Destinations;
 use crate::ironrdpwidget::{IronRdpWidget, RdpState};
 use crate::destinations_page::LlDestinationPage;
+use crate::password_dialog::LongLensPasswordDialog;
 
 fn parse_domain_port(input: &str) -> (String, u16) {
     let mut parts = input.splitn(2, ':');
@@ -188,17 +189,34 @@ impl LongLensWindow {
             .activate(move |window: &Self, _action, parameter| {
                 let (hostname, username, password, display_title): (String, String, String, String) =
                     parameter.unwrap().get().unwrap();
-                *window.imp().connection_display_title.borrow_mut() = display_title;
-                let (server, port) = parse_domain_port(&hostname);
-                let w = window.imp().stack.width();
-                let h = window.imp().stack.height();
-                let width = if w > 0 { w as u16 } else { 1280 };
-                let height = if h > 0 { h as u16 } else { 800 };
-                window.imp().rdpwidget
-                    .connect_to_server(server, port, username, password, width, height);
+                if password.is_empty() {
+                    let dialog = LongLensPasswordDialog::new();
+                    dialog.set_destination_name(&display_title);
+                    dialog.set_on_connect(glib::clone!(
+                        #[weak]
+                        window,
+                        move |password| {
+                            window.start_connection(hostname.clone(), username.clone(), password, display_title.clone());
+                        }
+                    ));
+                    dialog.present(Some(window));
+                } else {
+                    window.start_connection(hostname, username, password, display_title);
+                }
             })
             .build();
         self.add_action_entries([action_connect]);
+    }
+
+    fn start_connection(&self, hostname: String, username: String, password: String, display_title: String) {
+        *self.imp().connection_display_title.borrow_mut() = display_title;
+        let (server, port) = parse_domain_port(&hostname);
+        let w = self.imp().stack.width();
+        let h = self.imp().stack.height();
+        let width = if w > 0 { w as u16 } else { 1280 };
+        let height = if h > 0 { h as u16 } else { 800 };
+        self.imp().rdpwidget
+            .connect_to_server(server, port, username, password, width, height);
     }
 }
 

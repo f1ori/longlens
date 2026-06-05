@@ -21,6 +21,7 @@
 mod clipboard;
 mod destination_dialog;
 mod destination_row;
+mod password_dialog;
 mod application;
 mod search_provider;
 mod secrets;

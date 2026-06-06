@@ -5,12 +5,15 @@
   <project_license>GPL-3.0-or-later</project_license>
 
   <name>Long Lens</name>
-  <summary>A simple remote desktop client for RDP</summary>
+  <summary>Connect to remote desktop servers via RDP</summary>
   <description>
     <p>Long Lens is a simple, minimal, and modern RDP client.</p>
+    <p>Features:</p>
     <ul>
+      <li>Minimal UI to manage destinations</li>
       <li>Stores passwords in keyring</li>
       <li>Supports clipboard synchronization</li>
+      <li>Provides GNOME Search Provider (enable in GNOME Settings)</li>
     </ul>
   </description>
 
@@ -62,14 +65,9 @@
   </screenshots>
 
   <releases>
-    <release version="1.0.1" date="2024-01-18">
-      <url type="details">https://example.org/changelog.html#version_1.0.1</url>
+    <release version="0.1.0" date="2026-06-06">
       <description translate="no">
-        <p>Release description</p>
-        <ul>
-          <li>List of changes</li>
-          <li>List of changes</li>
-        </ul>
+        <p>Initial release</p>
       </description>
     </release>
   </releases>

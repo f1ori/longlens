@@ -6,8 +6,6 @@
 
 [![CI](https://github.com/f1ori/longlens/actions/workflows/flatpak.yml/badge.svg)](https://github.com/f1ori/longlens/actions/workflows/flatpak.yml)
 
-> **Note**: Even though basic RDP sessions work, this is still work in progress
-
 A simple, minimal, and modern RDP client
 
 <div align="center">
@@ -21,7 +19,6 @@ A simple, minimal, and modern RDP client
 * Clipboard synchronization
 * GNOME Search Provider for destinations (can be enabled in GNOME Settings)
 * Supports HighDPI displays
-* Based on GTK4/libadwaita/Rust/IronRDP
 
 ## How to install
 

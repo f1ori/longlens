@@ -22,9 +22,9 @@ A simple, minimal, and modern RDP client
 
 ## How to install
 
-Get the nightly from [this flathub repository on github pages](https://f1ori.github.io/longlens/)
+Get it from [this flatpak repository on github pages](https://f1ori.github.io/longlens/)
 
-Releases will follow, when it's more feature complete.
+The flatpak repository contains released versions and nightly development builds.
 
 ## How to build
 

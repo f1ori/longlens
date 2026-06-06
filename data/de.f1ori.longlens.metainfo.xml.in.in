@@ -55,11 +55,11 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/f1ori/longlens/main/data/screenshots/screenshot1.png</image>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot1.png</image>
       <caption>Remote session view</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/f1ori/longlens/main/data/screenshots/screenshot2.png</image>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot2.png</image>
       <caption>Destination list</caption>
     </screenshot>
   </screenshots>
@@ -67,7 +67,7 @@
   <releases>
     <release version="0.1.0" date="2026-06-06">
       <description translate="no">
-        <p>Initial release</p>
+        <p>First beta release</p>
       </description>
     </release>
   </releases>

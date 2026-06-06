@@ -561,6 +561,35 @@ mod imp {
                             imp.send_input_operation(operation);
                             glib::Propagation::Stop
                         }
+                        gdk::EventType::Scroll => {
+                            let scroll_event =
+                                event.clone().downcast::<gdk::ScrollEvent>().unwrap();
+                            if scroll_event.is_stop() {
+                                return glib::Propagation::Proceed;
+                            }
+                            let (dx, dy) = scroll_event.deltas();
+                            if dx.abs() > 0.001 {
+                                imp.send_input_operation(
+                                    ironrdp::input::Operation::WheelRotations(
+                                        ironrdp::input::WheelRotations {
+                                            is_vertical: false,
+                                            rotation_units: (dx * 120.0) as i16,
+                                        },
+                                    ),
+                                );
+                            }
+                            if dy.abs() > 0.001 {
+                                imp.send_input_operation(
+                                    ironrdp::input::Operation::WheelRotations(
+                                        ironrdp::input::WheelRotations {
+                                            is_vertical: true,
+                                            rotation_units: (-dy * 120.0) as i16,
+                                        },
+                                    ),
+                                );
+                            }
+                            glib::Propagation::Stop
+                        }
                         _ => glib::Propagation::Proceed,
                     }
                 }

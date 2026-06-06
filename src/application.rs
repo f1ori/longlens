@@ -22,13 +22,12 @@ use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gettextrs::gettext;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 
-use crate::config::{APP_ID, VERSION};
+use crate::config::APP_ID;
 use crate::destinations::Destinations;
 use crate::LongLensWindow;
 
@@ -172,17 +171,6 @@ impl LongLensApplication {
 
     fn show_about(&self) {
         let window = self.active_window().unwrap();
-        let about = adw::AboutDialog::builder()
-            .application_name("Long Lens")
-            .application_icon(APP_ID)
-            .developer_name("Florian Richter")
-            .version(VERSION)
-            .developers(vec!["Florian Richter"])
-            // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
-            .translator_credits(&gettext("translator-credits"))
-            .copyright("© 2026 Florian Richter")
-            .build();
-
-        about.present(Some(&window));
+        crate::about_dialog::show(&window);
     }
 }

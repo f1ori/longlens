@@ -8,6 +8,7 @@
             "options": {
                 "env": {
                     "GSETTINGS_SCHEMA_DIR": "${workspaceFolder}/builddir/install/share/glib-2.0/schemas",
+                    "XDG_DATA_DIRS": "${workspaceFolder}/builddir/install/share:/usr/local/share:/usr/share",
                     "RUST_BACKTRACE": "1",
                     "RUST_LOG": "longlens=debug,ironrdp=debug"
                 }
@@ -16,6 +17,12 @@
                 "kind": "build",
                 "isDefault": true
             },
+            "problemMatcher": []
+        },
+        {
+            "label": "Setup builddir",
+            "type": "shell",
+            "command": "meson setup builddir --reconfigure --prefix=${workspaceFolder}/builddir/install/ -Dprofile=development",
             "problemMatcher": []
         }
     ]

@@ -2,12 +2,20 @@ pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 gnome = import('gnome')
 
 
+vcs_tag = run_command('git', 'rev-parse', '--short', 'HEAD', check: false).stdout().strip()
+if vcs_tag == ''
+  vcs_tag = 'devel'
+endif
+
 conf = configuration_data()
 conf.set_quoted('APP_ID', application_id)
 conf.set_quoted('VERSION', meson.project_version())
+conf.set_quoted('PROFILE', profile)
+conf.set_quoted('VCS_TAG', vcs_tag)
 conf.set_quoted('GETTEXT_PACKAGE', 'longlens')
 conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))
 conf.set_quoted('PKGDATADIR', pkgdatadir)
+conf.set_quoted('METAINFO_PATH', '/de/f1ori/longlens/' + application_id + '.metainfo.xml')
 
 configure_file(
     input: 'config.rs.in',

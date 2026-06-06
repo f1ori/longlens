@@ -6,5 +6,8 @@
     <file compressed="true" preprocess="xml-stripblanks">ui/destinations_page.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/password_dialog.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/window.ui</file>
+    <file>@APP_ID@.metainfo.xml</file>
+    <file>icons/hicolor/scalable/apps/@APP_ID@.svg</file>
+    <file alias="icons/hicolor/symbolic/apps/@APP_ID@-symbolic.svg">icons/hicolor/symbolic/apps/de.f1ori.longlens-symbolic.svg</file>
   </gresource>
 </gresources>

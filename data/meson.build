@@ -87,12 +87,19 @@ blueprints = custom_target('blueprints',
   command: [find_program('blueprint-compiler'), 'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'],
 )
 
+gresource_xml = configure_file(
+  input: 'de.f1ori.longlens.gresource.xml.in',
+  output: 'de.f1ori.longlens.gresource.xml',
+  configuration: conf,
+)
+
 gnome.compile_resources('longlens',
-  'de.f1ori.longlens.gresource.xml',
+  gresource_xml,
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,
-  dependencies: blueprints,
+  dependencies: [blueprints, appstream_file],
+  source_dir: [meson.current_source_dir(), meson.current_build_dir()],
 )
 
 subdir('icons')

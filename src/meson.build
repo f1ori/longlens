@@ -9,6 +9,7 @@ endif
 
 conf = configuration_data()
 conf.set_quoted('APP_ID', application_id)
+conf.set_quoted('APP_NAME', app_name)
 conf.set_quoted('VERSION', meson.project_version())
 conf.set_quoted('PROFILE', profile)
 conf.set_quoted('VCS_TAG', vcs_tag)

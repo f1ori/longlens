@@ -22,7 +22,7 @@ use gettextrs::gettext;
 use adw::prelude::*;
 use gtk::Window;
 
-use crate::config::{APP_ID, METAINFO_PATH, PROFILE, VCS_TAG, VERSION};
+use crate::config::{METAINFO_PATH, PROFILE, VCS_TAG, VERSION};
 
 pub fn show(parent: &Window) {
     let about = adw::AboutDialog::from_appdata(METAINFO_PATH, Some(VERSION));
@@ -33,7 +33,6 @@ pub fn show(parent: &Window) {
         about.set_version(VERSION);
     }
 
-    about.set_application_icon(APP_ID);
     about.set_developers(&["Florian Richter <florian@richter-es.de>"]);
     // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
     about.set_translator_credits(&gettext("translator-credits"));

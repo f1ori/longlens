@@ -4,7 +4,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
 
-  <name>Long Lens</name>
+  <name>@APP_NAME@</name>
   <summary>Connect to remote desktop servers via RDP</summary>
   <description>
     <p>Long Lens is a simple, minimal, and modern RDP client.</p>

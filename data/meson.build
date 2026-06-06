@@ -1,6 +1,7 @@
 conf = configuration_data()
 conf.set('APP_ID', application_id)
 conf.set('APP_PATH', app_path)
+conf.set('APP_NAME', app_name)
 
 desktop_in = configure_file(
   input: 'de.f1ori.longlens.desktop.in.in',
@@ -98,7 +99,7 @@ gnome.compile_resources('longlens',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,
-  dependencies: [blueprints, appstream_file],
+  dependencies: [blueprints, appstream_file, metainfo_in],
   source_dir: [meson.current_source_dir(), meson.current_build_dir()],
 )
 

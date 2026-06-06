@@ -11,9 +11,11 @@ profile = get_option('profile')
 if profile == 'development'
   application_id = 'de.f1ori.longlens.Devel'
   app_path = '/de/f1ori/longlens/Devel/'
+  app_name = 'Long Lens (Devel)'
 else
   application_id = 'de.f1ori.longlens'
   app_path = '/de/f1ori/longlens/'
+  app_name = 'Long Lens'
 endif
 
 

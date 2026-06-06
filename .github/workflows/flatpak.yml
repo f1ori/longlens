@@ -1,5 +1,8 @@
-name: Publish Flatpak
-on: { push: { branches: [main] } }
+name: CI
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
 permissions:
   contents: read
   packages: write
@@ -9,7 +12,7 @@ jobs:
   publish:
     uses: aetherpak/actions/.github/workflows/publish.yml@v3
     with:
-      manifest-path: de.f1ori.longlens.Devel.json
+      manifest-path: ${{ startsWith(github.ref, 'refs/tags/v') && 'de.f1ori.longlens.json' || 'de.f1ori.longlens.Devel.json' }}
       run-linter: false
     secrets:
       gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}

@@ -1,6 +1,6 @@
-/* ironrdpwidget.rs
+/* rdp/mod.rs
  *
- * Copyright 2025 Florian Richter
+ * Copyright 2026 Florian Richter
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,16 +18,21 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use ironrdp_client::config::{ClipboardType, Config, Destination};
-use ironrdp_client::rdp::{DvcPipeProxyFactory, RdpClient, RdpInputEvent, RdpOutputEvent};
+//! The RDP display widget. This module holds the `IronRdpWidget` GObject and
+//! its GTK wiring; the pure logic it drives lives in the sibling submodules:
+//! [`config`] (connection config), [`input`] (event translation), [`render`]
+//! (framebuffer/cursor textures) and [`session`] (the worker thread).
+
+mod config;
+mod input;
+mod render;
+mod session;
+
 use ironrdp::cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy};
 use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
-use ironrdp::connector::{self, Credentials};
-use secrecy::ExposeSecret;
+use ironrdp::input::Operation;
+use ironrdp_client::rdp::{DvcPipeProxyFactory, RdpInputEvent, RdpOutputEvent};
 use crate::clipboard::{self as clip, ClientClipboardMessageProxy, GtkCliprdrBackendFactory};
-use ironrdp::pdu::gcc::KeyboardType;
-use ironrdp::pdu::rdp::capability_sets::{MajorPlatformType, client_codecs_capabilities};
-use ironrdp::pdu::rdp::client_info::{PerformanceFlags, TimezoneInfo};
 use gtk::glib::prelude::*;
 use gtk::glib::subclass::Signal;
 use gtk::glib::{self, Properties};
@@ -36,25 +41,6 @@ use gtk::subclass::prelude::*;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::sync::OnceLock;
 use tracing::{debug, info, warn};
-
-/// Wraps the framebuffer so it can be handed to `glib::Bytes::from_owned`
-/// without copying. ironrdp encodes pixels as `0x00RRGGBB`, which on
-/// little-endian is `[B, G, R, 0x00]` in memory — exactly `B8g8r8x8` — so the
-/// `u32` slice can be reinterpreted as bytes directly.
-struct PixelBytes(Vec<u32>);
-
-impl AsRef<[u8]> for PixelBytes {
-    fn as_ref(&self) -> &[u8] {
-        // SAFETY: the slice is valid for `len * 4` bytes, `u32` is suitably
-        // aligned for `u8`, and every byte pattern is a valid `u8`.
-        unsafe {
-            std::slice::from_raw_parts(
-                self.0.as_ptr() as *const u8,
-                std::mem::size_of_val(self.0.as_slice()),
-            )
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
 #[enum_type(name = "RdpState")]
@@ -98,6 +84,17 @@ mod imp {
                 .unwrap_or_else(|| self.obj().scale_factor() as f64)
         }
 
+        /// Converts a logical size into physical (scaled) pixels plus the
+        /// desktop scale factor in percent (e.g. `100` or `200`). Returns
+        /// `None` if the scaled dimensions don't fit in `u16`.
+        fn physical_size(&self, logical_width: f64, logical_height: f64) -> Option<(u16, u16, u32)> {
+            let scale_f = self.surface_scale();
+            let phys_width = u16::try_from((logical_width * scale_f).round() as i64).ok()?;
+            let phys_height = u16::try_from((logical_height * scale_f).round() as i64).ok()?;
+            let scale_factor = (scale_f * 100.0).round() as u32;
+            Some((phys_width, phys_height, scale_factor))
+        }
+
         pub fn connect_to_server(
             &self,
             hostname: String,
@@ -109,89 +106,24 @@ mod imp {
         ) {
             info!("Connecting to {}:{} {}x{}", hostname, port, width, height);
 
-            let scale_f = self.surface_scale();
-            let phys_width = (width as f64 * scale_f).round() as u16;
-            let phys_height = (height as f64 * scale_f).round() as u16;
+            let Some((phys_width, phys_height, scale_factor)) =
+                self.physical_size(width as f64, height as f64)
+            else {
+                return;
+            };
 
             // Gracefully close any existing connection
-            if let Some(sender) = self.input_sender.borrow().as_ref() {
-                let _ = sender.send(RdpInputEvent::Close);
-            }
+            self.disconnect();
 
             self.obj().set_state(RdpState::Connecting);
 
-            let (domain, username) = match username.split_once('\\') {
-                Some((d, u)) => (Some(d.to_owned()), u.to_owned()),
-                None => (None, username),
-            };
-
-            let codecs: Vec<&str> = vec![];
-            let codecs = match client_codecs_capabilities(&codecs) {
-                Ok(c) => c,
-                Err(e) => {
-                    warn!("Could not build codec capabilities: {}", e);
-                    return;
-                }
-            };
-
-            let connector_config = connector::Config {
-                credentials: Credentials::UsernamePassword { username, password: password.expose_secret().clone() },
-                domain,
-                enable_tls: true,
-                enable_credssp: true,
-                keyboard_type: KeyboardType::IbmEnhanced,
-                keyboard_subtype: 0,
-                keyboard_layout: 0,
-                keyboard_functional_keys_count: 12,
-                ime_file_name: String::new(),
-                dig_product_id: String::new(),
-                desktop_size: connector::DesktopSize { width: phys_width, height: phys_height },
-                desktop_scale_factor: (scale_f * 100.0).round() as u32,
-                bitmap: Some(connector::BitmapConfig {
-                    color_depth: 32,
-                    lossy_compression: true,
-                    codecs,
-                }),
-                client_build: 42,
-                client_name: String::from("longlens"),
-                client_dir: "C:\\Windows\\System32\\mstscax.dll".to_owned(),
-                alternate_shell: String::new(),
-                work_dir: String::new(),
-                compression_type: None,
-                multitransport_flags: None,
-                platform: match whoami::platform() {
-                    whoami::Platform::Windows => MajorPlatformType::WINDOWS,
-                    whoami::Platform::Linux => MajorPlatformType::UNIX,
-                    whoami::Platform::MacOS => MajorPlatformType::MACINTOSH,
-                    whoami::Platform::Ios => MajorPlatformType::IOS,
-                    whoami::Platform::Android => MajorPlatformType::ANDROID,
-                    _ => MajorPlatformType::UNSPECIFIED,
-                },
-                hardware_id: None,
-                license_cache: None,
-                enable_server_pointer: true,
-                autologon: false,
-                enable_audio_playback: true,
-                request_data: None,
-                pointer_software_rendering: false,
-                performance_flags: PerformanceFlags::default(),
-                timezone_info: TimezoneInfo::default(),
-            };
-
-            let config = Config {
-                destination: Destination::from_parts(hostname, port),
-                connector: connector_config,
-                clipboard_type: ClipboardType::Enable,
-                log_file: None,
-                gw: None,
-                kerberos_config: None,
-                rdcleanpath: None,
-                fake_events_interval: None,
-                dvc_pipe_proxies: vec![],
+            let Some(config) = config::build_config(
+                hostname, port, username, password, phys_width, phys_height, scale_factor,
+            ) else {
+                return;
             };
 
             let (input_tx, input_rx) = RdpInputEvent::create_channel();
-            let (output_tx, mut output_rx) = tokio::sync::mpsc::channel::<RdpOutputEvent>(64);
             let dvc_factory = DvcPipeProxyFactory::new(input_tx.clone());
 
             *self.input_sender.borrow_mut() = Some(input_tx.clone());
@@ -211,36 +143,7 @@ mod imp {
 
             let relay_tx = self.output_relay.get().unwrap().clone();
 
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_multi_thread()
-                    .worker_threads(2)
-                    .enable_all()
-                    .build()
-                    .unwrap();
-
-                let client = RdpClient {
-                    config,
-                    output_event_sender: output_tx,
-                    input_event_receiver: input_rx,
-                    cliprdr_factory,
-                    dvc_pipe_proxy_factory: dvc_factory,
-                };
-
-                rt.block_on(async move {
-                    let relay_handle = tokio::spawn(async move {
-                        while let Some(event) = output_rx.recv().await {
-                            if relay_tx.send(event).await.is_err() {
-                                break;
-                            }
-                        }
-                    });
-
-                    client.run().await;
-                    // Wait for the relay to forward all remaining events (including Terminated)
-                    // before the runtime drops and cancels the task.
-                    let _ = relay_handle.await;
-                });
-            });
+            session::spawn_rdp_session(config, input_rx, cliprdr_factory, dvc_factory, relay_tx);
         }
 
         pub fn disconnect(&self) {
@@ -275,16 +178,7 @@ mod imp {
                         info!("State connected (first frame received)");
                         self.obj().set_state(RdpState::Connected);
                     }
-                    // Reinterpret the framebuffer as bytes without copying
-                    // (the layout already matches B8g8r8x8; see PixelBytes).
-                    let bytes = glib::Bytes::from_owned(PixelBytes(buffer));
-                    *self.texture.borrow_mut() = Some(gdk::MemoryTexture::new(
-                        width.get().into(),
-                        height.get().into(),
-                        gdk::MemoryFormat::B8g8r8x8,
-                        &bytes,
-                        (width.get() as usize) * 4,
-                    ));
+                    *self.texture.borrow_mut() = Some(render::image_texture(buffer, width, height));
                     self.obj().queue_draw();
                 }
                 RdpOutputEvent::PointerDefault => {
@@ -300,42 +194,14 @@ mod imp {
                 }
                 RdpOutputEvent::PointerBitmap(pointer) => {
                     debug!(width = ?pointer.width, height = ?pointer.height, "Received pointer bitmap");
-                    let tex_w = pointer.width as i32;
-                    let tex_h = pointer.height as i32;
-                    let hotspot_x = pointer.hotspot_x as i32;
-                    let hotspot_y = pointer.hotspot_y as i32;
-                    let bitmap_bytes = glib::Bytes::from_owned(pointer.bitmap_data.clone());
-                    let texture = gdk::MemoryTexture::new(
-                        tex_w, tex_h,
-                        gdk::MemoryFormat::R8g8b8a8,
-                        &bitmap_bytes,
-                        (tex_w as usize) * 4,
-                    );
-                    // from_callback lets GTK pass width/height as logical pixels so the
-                    // cursor is displayed at the correct size on HiDPI displays.
-                    let cursor = gdk::Cursor::from_callback(
-                        move |_cursor, _cursor_size, scale, width, height, hx, hy| {
-                            *width = (tex_w as f64 / scale).round() as i32;
-                            *height = (tex_h as f64 / scale).round() as i32;
-                            *hx = hotspot_x;
-                            *hy = hotspot_y;
-                            let t = texture.clone().upcast::<gdk::Texture>();
-                            // The gtk4-rs binding uses to_glib_none (no ref bump) but
-                            // GdkCursorGetTextureCallback has transfer:full semantics —
-                            // GTK calls g_object_unref on the returned pointer. Leaking
-                            // one clone here provides the extra ref GTK will consume,
-                            // keeping the closure's own reference intact.
-                            std::mem::forget(t.clone());
-                            t
-                        },
-                        None,
-                    ).unwrap();
-                    self.obj().set_cursor(Some(&cursor));
+                    if let Some(cursor) = render::pointer_cursor(&pointer) {
+                        self.obj().set_cursor(Some(&cursor));
+                    }
                 }
             }
         }
 
-        fn send_input_operation(&self, operation: ironrdp::input::Operation) {
+        fn send_input_operation(&self, operation: Operation) {
             let input_events = self
                 .input_database
                 .get()
@@ -357,21 +223,19 @@ mod imp {
                 }
             }
         }
-    }
 
-    #[glib::derived_properties]
-    impl ObjectImpl for IronRdpWidget {
-        fn constructed(&self) {
-            self.parent_constructed();
-
+        fn setup_input_database(&self) {
             assert!(
                 self.input_database
                     .set(RefCell::new(ironrdp::input::Database::new()))
                     .is_ok()
             );
+        }
 
-            let (relay_tx, relay_rx) =
-                async_channel::bounded::<RdpOutputEvent>(64);
+        /// Sets up the channel that relays output events from the RDP worker
+        /// thread to `process_message` on the GTK main loop.
+        fn setup_output_relay(&self) {
+            let (relay_tx, relay_rx) = async_channel::bounded::<RdpOutputEvent>(64);
             self.output_relay.set(relay_tx).unwrap();
 
             glib::spawn_future_local(glib::clone!(
@@ -383,8 +247,12 @@ mod imp {
                     }
                 }
             ));
+        }
 
-            // Set up clipboard sharing.
+        /// Sets up bidirectional clipboard sharing: a task that writes
+        /// remote-originated text to the local clipboard, and a monitor that
+        /// forwards local clipboard changes to the remote.
+        fn setup_clipboard(&self) {
             let context = clip::new_shared_context();
             self.clipboard_context.set(context.clone()).ok();
 
@@ -449,7 +317,12 @@ mod imp {
                     });
                 });
             }
+        }
 
+        /// Sets up the motion controller: forwards pointer motion to the remote
+        /// and grabs focus / inhibits system shortcuts while the pointer is over
+        /// the connected session.
+        fn setup_motion_controller(&self) {
             let event_controller_motion = gtk::EventControllerMotion::new();
             event_controller_motion.connect_motion(glib::clone!(
                 #[weak(rename_to=imp)]
@@ -460,7 +333,7 @@ mod imp {
                     }
                     let scale = imp.surface_scale();
                     let operation =
-                        ironrdp::input::Operation::MouseMove(ironrdp::input::MousePosition {
+                        Operation::MouseMove(ironrdp::input::MousePosition {
                             x: (x * scale) as u16,
                             y: (y * scale) as u16,
                         });
@@ -474,32 +347,28 @@ mod imp {
                     if imp.state.get() != RdpState::Connected {
                         return;
                     }
-                    imp.obj().grab_focus();
-                    imp.obj()
-                        .root()
-                        .and_then(|r| r.surface())
-                        .as_ref()
-                        .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
-                        .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
+                    let obj = imp.obj();
+                    obj.grab_focus();
+                    crate::utils::set_shortcuts_inhibited(&*obj, true);
                 }
             ));
             event_controller_motion.connect_leave(glib::clone!(
                 #[weak(rename_to=imp)]
                 self,
                 move |_controller| {
-                    imp.obj()
-                        .root()
-                        .and_then(|r| r.surface())
-                        .as_ref()
-                        .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
-                        .inspect(|t| t.restore_system_shortcuts());
-                    if let Some(root) = imp.obj().root() {
+                    let obj = imp.obj();
+                    crate::utils::set_shortcuts_inhibited(&*obj, false);
+                    if let Some(root) = obj.root() {
                         root.set_focus(None::<&gtk::Widget>);
                     }
                 }
             ));
             self.obj().add_controller(event_controller_motion);
+        }
 
+        /// Sets up the legacy event controller translating mouse button, key and
+        /// scroll events into RDP input operations.
+        fn setup_input_controller(&self) {
             let event_controller = gtk::EventControllerLegacy::new();
             event_controller.connect_event(glib::clone!(
                 #[weak(rename_to=imp)]
@@ -511,20 +380,16 @@ mod imp {
                         gdk::EventType::ButtonRelease | gdk::EventType::ButtonPress => {
                             let button_event =
                                 event.clone().downcast::<gdk::ButtonEvent>().unwrap();
-                            let mouse_button = match button_event.button() {
-                                gdk::BUTTON_PRIMARY => ironrdp::input::MouseButton::Left,
-                                gdk::BUTTON_SECONDARY => ironrdp::input::MouseButton::Right,
-                                gdk::BUTTON_MIDDLE => ironrdp::input::MouseButton::Middle,
-                                _ => {
-                                    return glib::Propagation::Proceed;
-                                }
+                            let Some(mouse_button) = input::mouse_button(button_event.button())
+                            else {
+                                return glib::Propagation::Proceed;
                             };
                             let operation = match event.event_type() {
                                 gdk::EventType::ButtonPress => {
-                                    ironrdp::input::Operation::MouseButtonPressed(mouse_button)
+                                    Operation::MouseButtonPressed(mouse_button)
                                 }
                                 gdk::EventType::ButtonRelease => {
-                                    ironrdp::input::Operation::MouseButtonReleased(mouse_button)
+                                    Operation::MouseButtonReleased(mouse_button)
                                 }
                                 _ => {
                                     return glib::Propagation::Proceed;
@@ -536,23 +401,15 @@ mod imp {
                         gdk::EventType::KeyPress | gdk::EventType::KeyRelease => {
                             let key_event = event.clone().downcast::<gdk::KeyEvent>().unwrap();
                             let keycode: u16 = key_event.keycode().try_into().unwrap();
-                            let map = keycode::KeyMap::from_key_mapping(
-                                keycode::KeyMapping::Xkb(keycode),
-                            );
-                            let scancode = match map {
-                                Ok(map) => map.win,
-                                Err(_) => {
-                                    warn!("Unknown keycode {}", keycode);
-                                    return glib::Propagation::Proceed;
-                                }
+                            let Some(scancode) = input::key_scancode(keycode) else {
+                                return glib::Propagation::Proceed;
                             };
-                            let scancode = ironrdp::input::Scancode::from_u16(scancode);
                             let operation = match event.event_type() {
                                 gdk::EventType::KeyPress => {
-                                    ironrdp::input::Operation::KeyPressed(scancode)
+                                    Operation::KeyPressed(scancode)
                                 }
                                 gdk::EventType::KeyRelease => {
-                                    ironrdp::input::Operation::KeyReleased(scancode)
+                                    Operation::KeyReleased(scancode)
                                 }
                                 _ => {
                                     return glib::Propagation::Proceed;
@@ -568,25 +425,8 @@ mod imp {
                                 return glib::Propagation::Proceed;
                             }
                             let (dx, dy) = scroll_event.deltas();
-                            if dx.abs() > 0.001 {
-                                imp.send_input_operation(
-                                    ironrdp::input::Operation::WheelRotations(
-                                        ironrdp::input::WheelRotations {
-                                            is_vertical: false,
-                                            rotation_units: (dx * 120.0) as i16,
-                                        },
-                                    ),
-                                );
-                            }
-                            if dy.abs() > 0.001 {
-                                imp.send_input_operation(
-                                    ironrdp::input::Operation::WheelRotations(
-                                        ironrdp::input::WheelRotations {
-                                            is_vertical: true,
-                                            rotation_units: (-dy * 120.0) as i16,
-                                        },
-                                    ),
-                                );
+                            for operation in input::scroll_operations(dx, dy) {
+                                imp.send_input_operation(operation);
                             }
                             glib::Propagation::Stop
                         }
@@ -595,6 +435,19 @@ mod imp {
                 }
             ));
             self.obj().add_controller(event_controller);
+        }
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for IronRdpWidget {
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            self.setup_input_database();
+            self.setup_output_relay();
+            self.setup_clipboard();
+            self.setup_motion_controller();
+            self.setup_input_controller();
             self.obj().set_focusable(true);
         }
 
@@ -629,16 +482,11 @@ mod imp {
                     self,
                     move || {
                         *imp.resize_timeout.borrow_mut() = None;
-                        let scale_f = imp.surface_scale();
-                        let phys_width_i = (width as f64 * scale_f).round() as i32;
-                        let phys_height_i = (height as f64 * scale_f).round() as i32;
-                        let (Ok(phys_width), Ok(phys_height)) = (
-                            u16::try_from(phys_width_i),
-                            u16::try_from(phys_height_i),
-                        ) else {
+                        let Some((phys_width, phys_height, scale_factor)) =
+                            imp.physical_size(width as f64, height as f64)
+                        else {
                             return;
                         };
-                        let scale_factor = (scale_f * 100.0).round() as u32;
                         if let Some(sender) = imp.input_sender.borrow().as_ref() {
                             let _ = sender.send(RdpInputEvent::Resize {
                                 width: phys_width,

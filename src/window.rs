@@ -26,7 +26,7 @@ use secrecy::SecretString;
 use std::cell::RefCell;
 
 use crate::model::destination_object::DestinationObject;
-use crate::ironrdpwidget::{IronRdpWidget, RdpState};
+use crate::rdp::{IronRdpWidget, RdpState};
 use crate::destinations_page::LlDestinationPage;
 use crate::password_dialog::LongLensPasswordDialog;
 
@@ -134,16 +134,10 @@ mod imp {
                     if widget.state() == RdpState::Connected {
                         let display_title = window.connection_display_title.borrow().clone();
                         obj.set_title(Some(&display_title));
-                        obj.surface()
-                            .as_ref()
-                            .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
-                            .inspect(|t| t.inhibit_system_shortcuts(None::<gdk::Event>));
+                        crate::utils::set_shortcuts_inhibited(&*obj, true);
                     } else {
                         obj.set_title(Some("Long Lens"));
-                        obj.surface()
-                            .as_ref()
-                            .and_then(|s| s.downcast_ref::<gdk::Toplevel>())
-                            .inspect(|t| t.restore_system_shortcuts());
+                        crate::utils::set_shortcuts_inhibited(&*obj, false);
                     }
                 }
             ));

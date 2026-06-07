@@ -29,7 +29,7 @@ mod secrets;
 mod config;
 mod model;
 mod destinations_page;
-mod ironrdpwidget;
+mod rdp;
 mod window;
 mod utils;
 

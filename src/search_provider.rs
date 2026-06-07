@@ -6,7 +6,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use crate::application::LongLensApplication;
-use crate::destinations::Destinations;
+use crate::model::destinations::Destinations;
 
 const SEARCH_PROVIDER_XML: &str = r#"<node>
   <interface name="org.gnome.Shell.SearchProvider2">
@@ -35,29 +35,14 @@ const SEARCH_PROVIDER_XML: &str = r#"<node>
   </interface>
 </node>"#;
 
-fn filter_destinations(destinations: &Destinations, terms: &[String]) -> Vec<String> {
-    destinations
-        .items()
-        .iter()
-        .filter(|dest| {
-            let haystack = format!("{} {} {}", dest.name, dest.hostname, dest.username)
-                .to_lowercase();
-            terms.iter().all(|term| haystack.contains(&term.to_lowercase()))
-        })
-        .map(|dest| dest.uuid.clone())
-        .collect()
-}
-
 fn build_result_metas(
     destinations: &Destinations,
     identifiers: &[String],
 ) -> Vec<HashMap<String, glib::Variant>> {
-    //let icon = gio::ThemedIcon::new("network-server-symbolic");
-    //let icon_variant = icon.serialize().expect("ThemedIcon always serializes");
-
+    let items = destinations.items();
     identifiers
         .iter()
-        .filter_map(|id| destinations.items().iter().find(|d| &d.uuid == id))
+        .filter_map(|id| items.iter().find(|d| &d.uuid == id))
         .map(|dest| {
             let display_name = if dest.name.is_empty() {
                 dest.hostname.clone()
@@ -97,22 +82,19 @@ pub fn register_search_provider(connection: &gio::DBusConnection, app: &LongLens
                     "GetInitialResultSet" => {
                         let terms: Vec<String> =
                             params.child_value(0).get().unwrap_or_default();
-                        let destinations = Destinations::load();
-                        let results = filter_destinations(&destinations, &terms);
+                        let results = app.destinations().search(&terms);
                         invocation.return_value(Some(&(results,).to_variant()));
                     }
                     "GetSubsearchResultSet" => {
                         let terms: Vec<String> =
                             params.child_value(1).get().unwrap_or_default();
-                        let destinations = Destinations::load();
-                        let results = filter_destinations(&destinations, &terms);
+                        let results = app.destinations().search(&terms);
                         invocation.return_value(Some(&(results,).to_variant()));
                     }
                     "GetResultMetas" => {
                         let identifiers: Vec<String> =
                             params.child_value(0).get().unwrap_or_default();
-                        let destinations = Destinations::load();
-                        let metas = build_result_metas(&destinations, &identifiers);
+                        let metas = build_result_metas(&app.destinations(), &identifiers);
                         invocation.return_value(Some(&(metas,).to_variant()));
                     }
                     "ActivateResult" => {

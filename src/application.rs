@@ -28,7 +28,7 @@ use gtk::{gio, glib};
 
 
 use crate::config::APP_ID;
-use crate::destinations::Destinations;
+use crate::model::destinations::Destinations;
 use crate::LongLensWindow;
 
 mod imp {
@@ -36,7 +36,7 @@ mod imp {
 
     #[derive(Debug, Default)]
     pub struct LongLensApplication {
-        pub destinations: OnceCell<Rc<RefCell<Destinations>>>,
+        pub destinations: OnceCell<Rc<Destinations>>,
         pub settings: OnceCell<gio::Settings>,
         pub pending_connection: RefCell<Option<String>>,
     }
@@ -52,7 +52,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.destinations
-                .set(Rc::new(RefCell::new(Destinations::load())))
+                .set(Rc::new(Destinations::load()))
                 .expect("Could not set destinations");
             self.settings
                 .set(gio::Settings::new(APP_ID))
@@ -82,7 +82,6 @@ mod imp {
 
             if let Some(uuid) = self.pending_connection.borrow_mut().take() {
                 let window = LongLensWindow::new(&*application);
-                window.set_destinations(application.destinations());
                 window.present();
                 let window_weak = window.downgrade();
                 glib::idle_add_local_once(move || {
@@ -92,7 +91,6 @@ mod imp {
                 });
             } else {
                 let window = LongLensWindow::new(&*application);
-                window.set_destinations(application.destinations());
                 window.present();
             }
         }
@@ -109,7 +107,7 @@ glib::wrapper! {
 }
 
 impl LongLensApplication {
-    pub fn destinations(&self) -> Rc<RefCell<Destinations>> {
+    pub fn destinations(&self) -> Rc<Destinations> {
         self.imp().destinations.get().unwrap().clone()
     }
 
@@ -172,5 +170,14 @@ impl LongLensApplication {
     fn show_about(&self) {
         let window = self.active_window().unwrap();
         crate::about_dialog::show(&window);
+    }
+}
+
+impl Default for LongLensApplication {
+    fn default() -> Self {
+        gio::Application::default()
+            .expect("Could not get default GApplication")
+            .downcast()
+            .unwrap()
     }
 }

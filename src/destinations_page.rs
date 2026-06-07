@@ -18,7 +18,6 @@
  */
 use std::cell::Cell;
 use std::cell::OnceCell;
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -27,10 +26,11 @@ use gtk::{gio, glib};
 
 use secrecy::ExposeSecret;
 
+use crate::application::LongLensApplication;
 use crate::destination_dialog::LongLensDestinationDialog;
-use crate::destination_object::{DestinationData, DestinationObject};
+use crate::model::destination_object::DestinationObject;
 use crate::destination_row::LlDestinationRow;
-use crate::destinations::Destinations;
+use crate::model::destinations::Destinations;
 use crate::secrets;
 
 
@@ -45,8 +45,7 @@ mod imp {
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         pub destinations_list: TemplateChild<gtk::ListBox>,
-        pub destinations: OnceCell<gio::ListStore>,
-        pub destinations_data: OnceCell<Rc<RefCell<Destinations>>>,
+        pub destinations: OnceCell<Rc<Destinations>>,
     }
     #[gtk::template_callbacks]
     impl LlDestinationPage {
@@ -91,7 +90,27 @@ mod imp {
     impl ObjectImpl for LlDestinationPage {
         fn constructed(&self) {
             self.parent_constructed();
-            self.obj().setup_destinations();
+            let destinations = LongLensApplication::default().destinations();
+            let model = destinations.model();
+            self.destinations
+                .set(destinations)
+                .expect("Could not set destinations");
+            let page = self.obj();
+            self.destinations_list.bind_model(
+                Some(&model),
+                glib::clone!(
+                    #[weak]
+                    page,
+                    #[upgrade_or_panic]
+                    move |obj| {
+                        let destination_object = obj
+                            .downcast_ref::<DestinationObject>()
+                            .expect("The object should be of type `DestinationObject`.");
+                        let row = page.create_destination_row(destination_object);
+                        row.upcast()
+                    }
+                ),
+            );
         }
     }
     impl WidgetImpl for LlDestinationPage {}
@@ -105,66 +124,25 @@ glib::wrapper! {
 }
 
 impl LlDestinationPage {
+    /// The backing list model, exposed for the window's stack-page logic and
+    /// the `win.connect` lookup.
     pub fn destinations(&self) -> gio::ListStore {
+        self.store().model()
+    }
+
+    /// The shared destinations store that owns the model and persistence.
+    fn store(&self) -> Rc<Destinations> {
         self.imp()
             .destinations
             .get()
-            .expect("`destinations` should be set in `setup_destinations`.")
+            .expect("`destinations` should be set in `set_destinations`.")
             .clone()
     }
 
-    pub fn setup_destinations(&self) {
-        let model = gio::ListStore::new::<DestinationObject>();
-        self.imp()
-            .destinations
-            .set(model.clone())
-            .expect("Could not set destinations");
-
-        self.imp().destinations_list.bind_model(
-            Some(&model),
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                #[upgrade_or_panic]
-                move |obj| {
-                    let destination_object = obj
-                        .downcast_ref::<DestinationObject>()
-                        .expect("The object should be of type `DestinationObject`.");
-                    let row = window.create_destination_row(destination_object);
-                    row.upcast()
-                }
-            ),
-        )
-    }
-
-    pub fn set_destinations(&self, destinations: Rc<RefCell<Destinations>>) {
-        self.imp()
-            .destinations_data
-            .set(destinations)
-            .expect("Could not set destinations_data");
-        self.load_destinations();
-    }
-
-    pub fn load_destinations(&self) {
-        let data = self.imp().destinations_data.get().unwrap();
-        let destination_objects: Vec<DestinationObject> = data
-            .borrow()
-            .items()
-            .iter()
-            .cloned()
-            .map(DestinationObject::from_destination_data)
-            .collect();
-        self.destinations().extend_from_slice(&destination_objects);
-    }
-
-    /// Add a destination to both the list model and persistent storage.
-    /// Returns the UUID if added (None if a duplicate hostname+username already exists).
+    /// Add a destination via the store, returning its UUID
+    /// (None if a duplicate hostname+username already exists).
     pub fn add_destination(&self, name: String, hostname: String, username: String) -> Option<String> {
-        let destinations = self.imp().destinations_data.get().unwrap();
-        let uuid = destinations.borrow_mut().add(name.clone(), hostname.clone(), username.clone())?;
-        let data = DestinationData { uuid: uuid.clone(), name, hostname, username };
-        self.destinations().append(&DestinationObject::from_destination_data(data));
-        Some(uuid)
+        self.store().add(name, hostname, username)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -185,7 +163,7 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             move |_| {
-                let destinations = page.imp().destinations_data.get().unwrap().clone();
+                let store = page.store();
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
@@ -200,13 +178,14 @@ impl LlDestinationPage {
                 dialog.set_on_save(glib::clone!(
                     #[weak]
                     destination_object,
+                    #[strong]
+                    store,
                     #[upgrade_or_default]
                     move |name, hostname, username, password, remember| {
-                        destination_object.set_name(name.clone());
-                        destination_object.set_hostname(hostname.clone());
-                        destination_object.set_username(username.clone());
-                        destinations.borrow_mut().update(&destination_object.uuid(), name, hostname, username);
                         let uuid = destination_object.uuid();
+                        // Updates the shared DestinationObject in place, so the
+                        // bound row title/subtitle refresh automatically.
+                        store.update(&uuid, name, hostname, username);
                         if remember && !password.expose_secret().is_empty() {
                             secrets::store_password(&uuid, &password);
                         } else {
@@ -218,27 +197,12 @@ impl LlDestinationPage {
                 dialog.set_on_delete(glib::clone!(
                     #[weak]
                     destination_object,
-                    #[weak(rename_to = page)]
-                    page,
+                    #[strong]
+                    store,
                     move || {
                         let uuid = destination_object.uuid();
                         secrets::delete_password(&uuid);
-                        let model = page.destinations();
-                        let pos = model
-                            .iter::<DestinationObject>()
-                            .enumerate()
-                            .find_map(|(i, obj)| {
-                                obj.ok().filter(|o| o.uuid() == uuid).map(|_| i as u32)
-                            });
-                        if let Some(pos) = pos {
-                            model.remove(pos);
-                        }
-                        page.imp()
-                            .destinations_data
-                            .get()
-                            .unwrap()
-                            .borrow_mut()
-                            .remove(&uuid);
+                        store.remove(&uuid);
                     }
                 ));
                 dialog.present(Some(&page));
@@ -252,59 +216,45 @@ impl LlDestinationPage {
             self,
             move |_| {
                 let uuid = destination_object.uuid();
-                let model = page.destinations();
-                let pos = model
-                    .iter::<DestinationObject>()
-                    .enumerate()
-                    .find_map(|(i, obj)| {
-                        obj.ok().filter(|o| o.uuid() == uuid).map(|_| i as u32)
-                    });
-                if let Some(pos) = pos {
-                    let saved_data = Rc::new(destination_object.destination_data());
-                    model.remove(pos);
+                let store = page.store();
+                let Some((pos, _)) = store.find(&uuid) else {
+                    return;
+                };
+                let saved_data = Rc::new(destination_object.destination_data());
+                store.remove(&uuid);
 
-                    let undone = Rc::new(Cell::new(false));
-                    let toast = adw::Toast::new("Destination deleted");
-                    toast.set_button_label(Some("Undo"));
+                let undone = Rc::new(Cell::new(false));
+                let toast = adw::Toast::new("Destination deleted");
+                toast.set_button_label(Some("Undo"));
 
-                    toast.connect_button_clicked(glib::clone!(
-                        #[weak]
-                        page,
-                        #[strong]
-                        undone,
-                        #[strong]
-                        saved_data,
-                        move |_| {
-                            undone.set(true);
-                            page.destinations().insert(
-                                pos,
-                                &DestinationObject::from_destination_data((*saved_data).clone()),
-                            );
+                toast.connect_button_clicked(glib::clone!(
+                    #[weak]
+                    page,
+                    #[strong]
+                    undone,
+                    #[strong]
+                    saved_data,
+                    move |_| {
+                        undone.set(true);
+                        page.store().restore(pos, (*saved_data).clone());
+                    }
+                ));
+
+                toast.connect_dismissed(glib::clone!(
+                    #[strong]
+                    undone,
+                    #[strong]
+                    uuid,
+                    move |_| {
+                        // The destination is already gone from the store; only the
+                        // stored password remains to be cleaned up if not undone.
+                        if !undone.get() {
+                            secrets::delete_password(&uuid);
                         }
-                    ));
+                    }
+                ));
 
-                    toast.connect_dismissed(glib::clone!(
-                        #[weak]
-                        page,
-                        #[strong]
-                        undone,
-                        #[strong]
-                        uuid,
-                        move |_| {
-                            if !undone.get() {
-                                secrets::delete_password(&uuid);
-                                page.imp()
-                                    .destinations_data
-                                    .get()
-                                    .unwrap()
-                                    .borrow_mut()
-                                    .remove(&uuid);
-                            }
-                        }
-                    ));
-
-                    page.imp().toast_overlay.add_toast(toast);
-                }
+                page.imp().toast_overlay.add_toast(toast);
             }
         ));
 

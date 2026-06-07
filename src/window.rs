@@ -24,13 +24,21 @@ use gtk::{gio, glib};
 use secrecy::SecretString;
 
 use std::cell::RefCell;
-use std::rc::Rc;
 
-use crate::destination_object::DestinationObject;
-use crate::destinations::Destinations;
+use crate::model::destination_object::DestinationObject;
 use crate::ironrdpwidget::{IronRdpWidget, RdpState};
 use crate::destinations_page::LlDestinationPage;
 use crate::password_dialog::LongLensPasswordDialog;
+
+fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
+    if state == RdpState::Connected {
+        "rdppage"
+    } else if n_destinations == 0 {
+        "emptypage"
+    } else {
+        "destinationspage"
+    }
+}
 
 fn parse_domain_port(input: &str) -> (String, u16) {
     let mut parts = input.splitn(2, ':');
@@ -100,16 +108,6 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
-                if state == RdpState::Connected {
-                    "rdppage"
-                } else if n_destinations == 0 {
-                    "emptypage"
-                } else {
-                    "destinationspage"
-                }
-            }
-
             self.rdpwidget
                 .bind_property::<gtk::Button>("state", self.disconnectbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
@@ -149,7 +147,9 @@ mod imp {
                     }
                 }
             ));
-            self.destinations_page.destinations().connect_items_changed(glib::clone!(
+            let model = self.destinations_page.destinations();
+            self.stack.set_visible_child_name(stack_page(RdpState::default(), model.n_items()));
+            model.connect_items_changed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
                 move |model, _, _, _| {
@@ -157,8 +157,6 @@ mod imp {
                     window.stack.set_visible_child_name(stack_page(state, model.n_items()));
                 }
             ));
-            // Set initial page (destinations model is empty until set_destinations is called)
-            self.stack.set_visible_child_name(stack_page(RdpState::default(), 0));
             self.obj().setup_actions();
         }
     }
@@ -175,10 +173,6 @@ glib::wrapper! {
 }
 
 impl LongLensWindow {
-    pub fn set_destinations(&self, destinations: Rc<RefCell<Destinations>>) {
-        self.imp().destinations_page.set_destinations(destinations);
-    }
-
     pub fn new<P: IsA<gtk::Application>>(application: &P) -> Self {
         glib::Object::builder()
             .property("application", application)

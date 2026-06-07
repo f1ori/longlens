@@ -140,12 +140,18 @@ mod imp {
 
             self.obj().connect_map(|dialog| {
                 dialog.imp().hostnameentry.grab_focus();
-                let available = crate::secrets::is_available();
-                dialog.imp().rememberpasswordswitch.set_sensitive(available);
-                if !available {
-                    dialog.imp().rememberpasswordswitch.set_active(false);
-                }
-                dialog.imp().passwordentry.set_sensitive(dialog.imp().rememberpasswordswitch.is_active());
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    dialog,
+                    async move {
+                        let available = crate::secrets::is_available().await;
+                        dialog.imp().rememberpasswordswitch.set_sensitive(available);
+                        if !available {
+                            dialog.imp().rememberpasswordswitch.set_active(false);
+                        }
+                        dialog.imp().passwordentry.set_sensitive(dialog.imp().rememberpasswordswitch.is_active());
+                    }
+                ));
             });
         }
     }

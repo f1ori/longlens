@@ -195,23 +195,29 @@ impl LongLensWindow {
                 let hostname = dest.hostname();
                 let username = dest.username();
                 let display_title = dest.property::<String>("display-title");
-                match crate::secrets::get_password(&uuid) {
-                    Some(password) => {
-                        window.start_connection(hostname, username, password, display_title);
-                    }
-                    None => {
-                        let dialog = LongLensPasswordDialog::new();
-                        dialog.set_destination_name(&display_title);
-                        dialog.set_on_connect(glib::clone!(
-                            #[weak]
-                            window,
-                            move |password| {
-                                window.start_connection(hostname.clone(), username.clone(), password, display_title.clone());
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move {
+                        match crate::secrets::get_password(&uuid).await {
+                            Some(password) => {
+                                window.start_connection(hostname, username, password, display_title);
                             }
-                        ));
-                        dialog.present(Some(window));
+                            None => {
+                                let dialog = LongLensPasswordDialog::new();
+                                dialog.set_destination_name(&display_title);
+                                dialog.set_on_connect(glib::clone!(
+                                    #[weak]
+                                    window,
+                                    move |password| {
+                                        window.start_connection(hostname.clone(), username.clone(), password, display_title.clone());
+                                    }
+                                ));
+                                dialog.present(Some(&window));
+                            }
+                        }
                     }
-                }
+                ));
             })
             .build();
         self.add_action_entries([action_connect]);

@@ -168,12 +168,6 @@ impl LlDestinationPage {
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
                 dialog.imp().usernameentry.set_text(&destination_object.username());
-                // Pre-fill stored password if available
-                if let Some(pw) = secrets::get_password(&destination_object.uuid()) {
-                    dialog.imp().passwordentry.set_text(pw.expose_secret());
-                } else {
-                    dialog.imp().rememberpasswordswitch.set_active(false);
-                }
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
                     #[weak]
@@ -186,11 +180,17 @@ impl LlDestinationPage {
                         // Updates the shared DestinationObject in place, so the
                         // bound row title/subtitle refresh automatically.
                         store.update(&uuid, name, hostname, username);
-                        if remember && !password.expose_secret().is_empty() {
-                            secrets::store_password(&uuid, &password);
-                        } else {
-                            secrets::delete_password(&uuid);
-                        }
+                        glib::spawn_future_local(glib::clone!(
+                            #[strong]
+                            uuid,
+                            async move {
+                                if remember && !password.expose_secret().is_empty() {
+                                    secrets::store_password(&uuid, &password).await;
+                                } else {
+                                    secrets::delete_password(&uuid).await;
+                                }
+                            }
+                        ));
                         Some(uuid)
                     }
                 ));
@@ -201,8 +201,24 @@ impl LlDestinationPage {
                     store,
                     move || {
                         let uuid = destination_object.uuid();
-                        secrets::delete_password(&uuid);
                         store.remove(&uuid);
+                        glib::spawn_future_local(async move {
+                            secrets::delete_password(&uuid).await;
+                        });
+                    }
+                ));
+                // Pre-fill stored password if available.
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    dialog,
+                    #[weak]
+                    destination_object,
+                    async move {
+                        if let Some(pw) = secrets::get_password(&destination_object.uuid()).await {
+                            dialog.imp().passwordentry.set_text(pw.expose_secret());
+                        } else {
+                            dialog.imp().rememberpasswordswitch.set_active(false);
+                        }
                     }
                 ));
                 dialog.present(Some(&page));
@@ -249,7 +265,10 @@ impl LlDestinationPage {
                         // The destination is already gone from the store; only the
                         // stored password remains to be cleaned up if not undone.
                         if !undone.get() {
-                            secrets::delete_password(&uuid);
+                            let uuid = uuid.clone();
+                            glib::spawn_future_local(async move {
+                                secrets::delete_password(&uuid).await;
+                            });
                         }
                     }
                 ));
@@ -270,7 +289,13 @@ impl LlDestinationPage {
             move |name, hostname, username, password, remember| {
                 if let Some(uuid) = page.add_destination(name, hostname, username) {
                     if remember && !password.expose_secret().is_empty() {
-                        secrets::store_password(&uuid, &password);
+                        glib::spawn_future_local(glib::clone!(
+                            #[strong]
+                            uuid,
+                            async move {
+                                secrets::store_password(&uuid, &password).await;
+                            }
+                        ));
                     }
                     Some(uuid)
                 } else {

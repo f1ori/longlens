@@ -155,7 +155,37 @@ mod imp {
         }
     }
     impl WidgetImpl for LongLensWindow {}
-    impl WindowImpl for LongLensWindow {}
+    impl WindowImpl for LongLensWindow {
+        fn close_request(&self) -> glib::Propagation {
+            if self.rdpwidget.state() != RdpState::Connected {
+                return self.parent_close_request();
+            }
+
+            let dialog = adw::AlertDialog::new(
+                Some("Disconnect?"),
+                Some("You are currently connected to a remote session. Do you want to disconnect and close?"),
+            );
+            dialog.add_response("cancel", "Cancel");
+            dialog.add_response("disconnect", "Disconnect");
+            dialog.set_response_appearance("disconnect", adw::ResponseAppearance::Destructive);
+            dialog.set_default_response(Some("disconnect"));
+            dialog.set_close_response("cancel");
+
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                async move {
+                    let response = dialog.choose_future(Some(&*window.obj())).await;
+                    if response == "disconnect" {
+                        window.rdpwidget.disconnect();
+                        window.obj().destroy();
+                    }
+                }
+            ));
+
+            glib::Propagation::Stop
+        }
+    }
     impl ApplicationWindowImpl for LongLensWindow {}
     impl AdwApplicationWindowImpl for LongLensWindow {}
 }

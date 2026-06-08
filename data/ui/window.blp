@@ -57,6 +57,26 @@ template $LongLensWindow: Adw.ApplicationWindow {
         };
       }
 
+      StackPage {
+        name: "connectingpage";
+
+        child: Gtk.Box {
+          orientation: vertical;
+          valign: center;
+          halign: center;
+          spacing: 12;
+
+          Adw.Spinner {
+            width-request: 32;
+            height-request: 32;
+          }
+
+          Gtk.Label {
+            label: _("Connecting…");
+          }
+        };
+      }
+
       StackPage rdppage {
         name: "rdppage";
 

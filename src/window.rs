@@ -33,6 +33,8 @@ use crate::password_dialog::LongLensPasswordDialog;
 fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
     if state == RdpState::Connected {
         "rdppage"
+    } else if state == RdpState::Connecting {
+        "connectingpage"
     } else if n_destinations == 0 {
         "emptypage"
     } else {
@@ -112,7 +114,7 @@ mod imp {
                 .bind_property::<gtk::Button>("state", self.disconnectbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
-                    Some(state == RdpState::Connected)
+                    Some(state == RdpState::Connected || state == RdpState::Connecting)
                 })
                 .sync_create()
                 .build();
@@ -131,10 +133,11 @@ mod imp {
                     let obj = window.obj();
                     let n = window.destinations_page.destinations().n_items();
                     window.stack.set_visible_child_name(stack_page(widget.state(), n));
-                    if widget.state() == RdpState::Connected {
+                    let state = widget.state();
+                    if state == RdpState::Connected || state == RdpState::Connecting {
                         let display_title = window.connection_display_title.borrow().clone();
                         obj.set_title(Some(&display_title));
-                        crate::utils::set_shortcuts_inhibited(&*obj, true);
+                        crate::utils::set_shortcuts_inhibited(&*obj, state == RdpState::Connected);
                     } else {
                         obj.set_title(Some("Long Lens"));
                         crate::utils::set_shortcuts_inhibited(&*obj, false);
@@ -157,7 +160,8 @@ mod imp {
     impl WidgetImpl for LongLensWindow {}
     impl WindowImpl for LongLensWindow {
         fn close_request(&self) -> glib::Propagation {
-            if self.rdpwidget.state() != RdpState::Connected {
+            let state = self.rdpwidget.state();
+            if state != RdpState::Connected && state != RdpState::Connecting {
                 return self.parent_close_request();
             }
 

@@ -194,7 +194,7 @@ mod imp {
                 }
                 RdpOutputEvent::PointerBitmap(pointer) => {
                     debug!(width = ?pointer.width, height = ?pointer.height, "Received pointer bitmap");
-                    if let Some(cursor) = render::pointer_cursor(&pointer) {
+                    if let Some(cursor) = render::pointer_cursor(&pointer, self.surface_scale()) {
                         self.obj().set_cursor(Some(&cursor));
                     }
                 }

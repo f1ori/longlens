@@ -233,7 +233,8 @@ impl LongLensWindow {
                             }
                             None => {
                                 let dialog = LongLensPasswordDialog::new();
-                                dialog.set_destination_name(&display_title);
+                                dialog.set_hostname(&hostname);
+                                dialog.set_username(&username);
                                 dialog.set_on_connect(glib::clone!(
                                     #[weak]
                                     window,

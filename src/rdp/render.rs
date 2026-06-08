@@ -25,6 +25,7 @@ use core::num::NonZeroU16;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ironrdp::graphics::pointer::DecodedPointer;
+use tracing::warn;
 
 /// Wraps the framebuffer so it can be handed to `glib::Bytes::from_owned`
 /// without copying. ironrdp encodes pixels as `0x00RRGGBB`, which on
@@ -60,8 +61,12 @@ pub fn image_texture(buffer: Vec<u32>, width: NonZeroU16, height: NonZeroU16) ->
 }
 
 /// Builds a GDK cursor from an IronRDP pointer bitmap, or `None` if the cursor
-/// could not be created.
-pub fn pointer_cursor(pointer: &DecodedPointer) -> Option<gdk::Cursor> {
+/// could not be created. `connection_scale` is the display scale that was
+/// active when the connection was started or last resized — the RDP server
+/// rendered the pointer bitmap at that scale, so we use it to convert from
+/// physical to logical pixels. A warning is logged when GTK's callback-provided
+/// scale differs, as the cursor will then be mis-sized or blurry.
+pub fn pointer_cursor(pointer: &DecodedPointer, connection_scale: f64) -> Option<gdk::Cursor> {
     let tex_w = pointer.width as i32;
     let tex_h = pointer.height as i32;
     let hotspot_x = pointer.hotspot_x as i32;
@@ -74,14 +79,20 @@ pub fn pointer_cursor(pointer: &DecodedPointer) -> Option<gdk::Cursor> {
         &bitmap_bytes,
         (tex_w as usize) * 4,
     );
-    // from_callback lets GTK pass width/height as logical pixels so the
-    // cursor is displayed at the correct size on HiDPI displays.
     gdk::Cursor::from_callback(
         move |_cursor, _cursor_size, scale, width, height, hx, hy| {
-            *width = (tex_w as f64 / scale).round() as i32;
-            *height = (tex_h as f64 / scale).round() as i32;
-            *hx = hotspot_x;
-            *hy = hotspot_y;
+            if (scale - connection_scale).abs() > f64::EPSILON {
+                warn!(
+                    connection_scale,
+                    callback_scale = scale,
+                    "cursor scale mismatch: pointer bitmap was rendered at connection scale \
+                     but GTK requests a different scale; cursor may appear blurry or mis-sized"
+                );
+            }
+            *width = (tex_w as f64 / connection_scale).round() as i32;
+            *height = (tex_h as f64 / connection_scale).round() as i32;
+            *hx = (hotspot_x as f64 / connection_scale).round() as i32;
+            *hy = (hotspot_y as f64 / connection_scale).round() as i32;
             let t = texture.clone().upcast::<gdk::Texture>();
             // The gtk4-rs binding uses to_glib_none (no ref bump) but
             // GdkCursorGetTextureCallback has transfer:full semantics —

@@ -14,7 +14,9 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
-        pub passwordgroup: TemplateChild<adw::PreferencesGroup>,
+        pub hostnamerow: TemplateChild<adw::ActionRow>,
+        #[template_child]
+        pub usernamerow: TemplateChild<adw::ActionRow>,
         pub on_connect: RefCell<Option<Box<dyn Fn(SecretString) + 'static>>>,
     }
 
@@ -89,8 +91,12 @@ impl LongLensPasswordDialog {
         glib::Object::builder().build()
     }
 
-    pub fn set_destination_name(&self, name: &str) {
-        self.imp().passwordgroup.set_description(Some(name));
+    pub fn set_hostname(&self, hostname: &str) {
+        self.imp().hostnamerow.set_subtitle(hostname);
+    }
+
+    pub fn set_username(&self, username: &str) {
+        self.imp().usernamerow.set_subtitle(username);
     }
 
     pub fn set_on_connect(&self, callback: impl Fn(SecretString) + 'static) {

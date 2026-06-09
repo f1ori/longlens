@@ -65,6 +65,12 @@ mod imp {
     impl ApplicationImpl for LongLensApplication {
         fn startup(&self) {
             self.parent_startup();
+
+            // Opt out of host icon theming, because otherwise on Ubuntu icons look odd.
+            if let Some(settings) = gtk::Settings::default() {
+                settings.set_gtk_icon_theme_name(Some("Adwaita"));
+            }
+
             let scheme = self.settings.get().unwrap().string("color-scheme");
             super::LongLensApplication::apply_color_scheme(&scheme);
 

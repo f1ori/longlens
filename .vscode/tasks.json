@@ -24,6 +24,12 @@
             "type": "shell",
             "command": "meson setup builddir --reconfigure --prefix=${workspaceFolder}/builddir/install/ -Dprofile=development",
             "problemMatcher": []
+        },
+        {
+            "label": "Generate translation template (pot file)",
+            "type": "shell",
+            "command": "meson compile -C builddir longlens-pot",
+            "problemMatcher": []
         }
     ]
 }

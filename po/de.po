@@ -1,0 +1,169 @@
+# German translation for longlens.
+# Copyright (C) 2026 longlens's COPYRIGHT HOLDER
+# This file is distributed under the same license as the longlens package.
+#
+# Florian Richter <florian@richter-es.de>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: longlens\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-10 19:55+0000\n"
+"PO-Revision-Date: 2026-06-10 22:24+0200\n"
+"Last-Translator: Florian Richter <florian@richter-es.de>\n"
+"Language-Team: de\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Gtranslator 50.0\n"
+
+#. Translators: Big label button to create the first destination if none exists
+#: data/ui/destination_dialog.blp:5 data/ui/window.blp:47
+#: src/destination_dialog.rs:179
+msgid "Add Destination"
+msgstr "Ziel hinzufügen"
+
+#: data/ui/destination_dialog.blp:14 data/ui/password_dialog.blp:14
+#: src/window.rs:173
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: data/ui/destination_dialog.blp:20
+msgid "Save & Connect"
+msgstr "Speichern & Verbinden"
+
+#: data/ui/destination_dialog.blp:28
+msgid "Only save"
+msgstr "Nur speichern"
+
+#: data/ui/destination_dialog.blp:36
+msgid "Name"
+msgstr "Name"
+
+#: data/ui/destination_dialog.blp:41
+msgid "Hostname"
+msgstr "Hostname"
+
+#: data/ui/destination_dialog.blp:42
+msgid "Hostname or Hostname:Port"
+msgstr "Hostname oder Hostname:Port"
+
+#: data/ui/destination_dialog.blp:47 data/ui/password_dialog.blp:35
+msgid "Username"
+msgstr "Benutzername"
+
+#: data/ui/destination_dialog.blp:48
+msgid "Username or Domain\\Username"
+msgstr "Benutzername oder Domäne\\Benutzername"
+
+#: data/ui/destination_dialog.blp:53 data/ui/password_dialog.blp:43
+msgid "Password"
+msgstr "Passwort"
+
+#: data/ui/destination_dialog.blp:58
+msgid "Remember password"
+msgstr "Passwort merken"
+
+#: data/ui/destination_dialog.blp:59
+msgid "Store the password in the keyring"
+msgstr "Das Passwort im Schlüsselbund speichern"
+
+#: data/ui/destination_row.blp:12
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#: data/ui/destination_row.blp:23
+msgid "Delete"
+msgstr "Löschen"
+
+#: data/ui/password_dialog.blp:5
+msgid "Enter Password"
+msgstr "Passwort eingeben"
+
+#: data/ui/password_dialog.blp:20
+msgid "Connect"
+msgstr "Verbinden"
+
+#: data/ui/password_dialog.blp:29
+msgid "Host"
+msgstr "Host"
+
+#: data/ui/window.blp:7
+msgid "Long Lens"
+msgstr "Long Lens"
+
+#: data/ui/window.blp:14 src/window.rs:174
+msgid "Disconnect"
+msgstr "Trennen"
+
+#: data/ui/window.blp:21
+msgid "Add destination"
+msgstr "Ziel hinzufügen"
+
+#: data/ui/window.blp:30
+msgid "Main Menu"
+msgstr "Hauptmenü"
+
+#: data/ui/window.blp:42
+msgid "No destinations"
+msgstr "Keine Ziele"
+
+#: data/ui/window.blp:76
+msgid "Connecting…"
+msgstr "Verbinde…"
+
+#: data/ui/window.blp:96
+msgid "_New Window"
+msgstr "_Neues Fenster"
+
+#: data/ui/window.blp:102
+msgid "_Theme"
+msgstr "_Erscheinungsbild"
+
+#: data/ui/window.blp:106
+msgid "_System Default"
+msgstr "_Systemstandard"
+
+#: data/ui/window.blp:112
+msgid "_Light"
+msgstr "_Hell"
+
+#: data/ui/window.blp:118
+msgid "_Dark"
+msgstr "_Dunkel"
+
+#: data/ui/window.blp:127
+msgid "_About Long Lens"
+msgstr "_Über Long Lens"
+
+#: src/destination_dialog.rs:177
+msgid "Edit Destination"
+msgstr "Ziel bearbeiten"
+
+#: src/destinations_page.rs:69 src/window.rs:88
+msgid "Connection error"
+msgstr "Verbindungsfehler"
+
+#: src/destinations_page.rs:70 src/window.rs:89
+msgid "Close"
+msgstr "Schließen"
+
+#: src/window.rs:170
+msgid "Disconnect?"
+msgstr "Trennen?"
+
+#: src/window.rs:171
+msgid ""
+"You are currently connected to a remote session. Do you want to disconnect "
+"and close?"
+msgstr ""
+"Sie sind derzeit mit einer Remote-Sitzung verbunden. Möchten Sie die "
+"Verbindung trennen und schließen?"
+
+#~ msgid "Destination deleted"
+#~ msgstr "Ziel gelöscht"
+
+#~ msgid "Undo"
+#~ msgstr "Rückgängig"

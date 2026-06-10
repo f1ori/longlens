@@ -22,6 +22,7 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::{gio, glib};
 
 use secrecy::ExposeSecret;
@@ -65,8 +66,8 @@ mod imp {
 
         #[template_callback]
         fn handle_connection_failed(&self, reason: String) {
-            let dialog = adw::AlertDialog::new(Some("Connection error"), Some(&reason));
-            dialog.add_response("close", "Close");
+            let dialog = adw::AlertDialog::new(Some(&gettext("Connection error")), Some(&reason));
+            dialog.add_response("close", &gettext("Close"));
             dialog.present(Some(&*self.obj()));
         }
     }
@@ -240,8 +241,8 @@ impl LlDestinationPage {
                 store.remove(&uuid);
 
                 let undone = Rc::new(Cell::new(false));
-                let toast = adw::Toast::new("Destination deleted");
-                toast.set_button_label(Some("Undo"));
+                let toast = adw::Toast::new(&gettext("Destination deleted"));
+                toast.set_button_label(Some(&gettext("Undo")));
 
                 toast.connect_button_clicked(glib::clone!(
                     #[weak]

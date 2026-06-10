@@ -20,6 +20,7 @@
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::{gio, glib};
 use secrecy::SecretString;
 
@@ -84,8 +85,8 @@ mod imp {
 
         #[template_callback]
         fn handle_connection_failed(&self, reason: String) {
-            let dialog = adw::AlertDialog::new(Some("Connection error"), Some(&reason));
-            dialog.add_response("close", "Close");
+            let dialog = adw::AlertDialog::new(Some(&gettext("Connection error")), Some(&reason));
+            dialog.add_response("close", &gettext("Close"));
             dialog.present(Some(&*self.obj()));
         }
     }
@@ -139,7 +140,7 @@ mod imp {
                         obj.set_title(Some(&display_title));
                         crate::utils::set_shortcuts_inhibited(&*obj, state == RdpState::Connected);
                     } else {
-                        obj.set_title(Some("Long Lens"));
+                        obj.set_title(Some(&gettext("Long Lens")));
                         crate::utils::set_shortcuts_inhibited(&*obj, false);
                     }
                 }
@@ -166,11 +167,11 @@ mod imp {
             }
 
             let dialog = adw::AlertDialog::new(
-                Some("Disconnect?"),
-                Some("You are currently connected to a remote session. Do you want to disconnect and close?"),
+                Some(&gettext("Disconnect?")),
+                Some(&gettext("You are currently connected to a remote session. Do you want to disconnect and close?")),
             );
-            dialog.add_response("cancel", "Cancel");
-            dialog.add_response("disconnect", "Disconnect");
+            dialog.add_response("cancel", &gettext("Cancel"));
+            dialog.add_response("disconnect", &gettext("Disconnect"));
             dialog.set_response_appearance("disconnect", adw::ResponseAppearance::Destructive);
             dialog.set_default_response(Some("disconnect"));
             dialog.set_close_response("cancel");

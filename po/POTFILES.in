@@ -1,6 +1,10 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
-data/de.f1ori.longlens.desktop.in
-data/de.f1ori.longlens.metainfo.xml.in
-data/de.f1ori.longlens.gschema.xml
-src/window.ui
+data/ui/destination_dialog.blp
+data/ui/destination_row.blp
+data/ui/destinations_page.blp
+data/ui/password_dialog.blp
+data/ui/window.blp
+src/destination_dialog.rs
+src/destinations_page.rs
+src/window.rs

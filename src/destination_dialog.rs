@@ -2,6 +2,7 @@ use std::cell::{Cell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::glib;
 use secrecy::SecretString;
 
@@ -173,9 +174,9 @@ impl LongLensDestinationDialog {
     pub fn set_edit_mode(&self, edit_mode: bool) {
         self.imp().is_edit_mode.set(edit_mode);
         if edit_mode {
-            self.set_title("Edit Destination");
+            self.set_title(&gettext("Edit Destination"));
         } else {
-            self.set_title("Add Destination");
+            self.set_title(&gettext("Add Destination"));
         }
     }
 

@@ -122,7 +122,7 @@ mod imp {
                 .bind_property::<gtk::Button>("state", self.adddestinationbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
-                    Some(state != RdpState::Connected)
+                    Some(state != RdpState::Connected && state != RdpState::Connecting)
                 })
                 .sync_create()
                 .build();

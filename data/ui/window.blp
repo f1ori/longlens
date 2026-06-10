@@ -17,7 +17,8 @@ template $LongLensWindow: Adw.ApplicationWindow {
       }
 
       Button adddestinationbutton {
-        label: _("Add destination");
+        icon-name: "list-add-symbolic";
+        tooltip-text: _("Add destination");
         clicked => $handle_adddestinationbutton_clicked() swapped;
       }
 

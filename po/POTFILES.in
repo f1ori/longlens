@@ -8,4 +8,5 @@ data/ui/password_dialog.blp
 data/ui/window.blp
 src/destination_dialog.rs
 src/destinations_page.rs
+src/rdp/mod.rs
 src/window.rs

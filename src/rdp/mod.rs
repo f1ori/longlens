@@ -33,6 +33,10 @@ use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
 use ironrdp::input::Operation;
 use ironrdp_client::rdp::{DvcPipeProxyFactory, RdpInputEvent, RdpOutputEvent};
 use crate::clipboard::{self as clip, ClientClipboardMessageProxy, GtkCliprdrBackendFactory};
+use ironrdp::connector::sspi::credssp::NStatusCode;
+use ironrdp::connector::sspi::ErrorKind as SspiErrorKind;
+use ironrdp::connector::{ConnectorError, ConnectorErrorKind};
+use gettextrs::gettext;
 use gtk::glib::prelude::*;
 use gtk::glib::subclass::Signal;
 use gtk::glib::{self, Properties};
@@ -49,6 +53,68 @@ pub enum RdpState {
     Disconnected = 0,
     Connecting = 1,
     Connected = 2,
+}
+
+/// Translate a low-level [`ConnectorError`] into a short, user-facing message.
+///
+/// IronRDP reports connection problems as a chain of technical errors (e.g. a
+/// CredSSP/SSPI logon failure with a Windows status code). Surfacing that chain
+/// verbatim is confusing, so we map the common cases — above all wrong
+/// credentials — to friendly text and only fall back to the raw error chain for
+/// the unexpected ones.
+fn friendly_connection_error(reason: &ConnectorError) -> String {
+    // Network Level Authentication (CredSSP) reports a bad username/password as a
+    // generic `InvalidToken`, with the real cause in the Windows NTSTATUS code it
+    // carries (e.g. STATUS_LOGON_FAILURE). Match on that status — and on the SSPI
+    // error kinds that unambiguously mean "credentials rejected" — rather than on
+    // the opaque top-level error.
+    if let ConnectorErrorKind::Credssp(e) = reason.kind() {
+        let bad_credentials = matches!(
+            e.nstatus,
+            Some(
+                NStatusCode::LOGON_FAILURE
+                    | NStatusCode::WRONG_PASSWORD
+                    | NStatusCode::NO_SUCH_USER
+                    | NStatusCode::ACCOUNT_RESTRICTION
+            )
+        ) || matches!(
+            e.error_type,
+            SspiErrorKind::LogonDenied
+                | SspiErrorKind::UnknownCredentials
+                | SspiErrorKind::NoCredentials
+                | SspiErrorKind::WrongPrincipalName
+        );
+        if bad_credentials {
+            return gettext(
+                "The username or password is incorrect. Please check your credentials and try again.",
+            );
+        }
+    }
+
+    match reason.kind() {
+        // Server refused the logon (e.g. non-NLA path, account not permitted).
+        ConnectorErrorKind::AccessDenied => gettext(
+            "Access was denied. The username or password may be incorrect, or this account is not allowed to connect.",
+        ),
+        // Anything else (network failures, DNS lookup, protocol errors, …):
+        // show a friendly prefix plus the root-cause message. We deliberately
+        // skip the top-level `Display`, which prepends internal noise like
+        // "[TCP connect @ .../lib.rs:416] custom error:", and instead surface
+        // the deepest source (e.g. "Name or service not known").
+        _ => {
+            let mut detail = None;
+            let mut source = std::error::Error::source(reason);
+            while let Some(e) = source {
+                detail = Some(e.to_string());
+                source = e.source();
+            }
+            match detail {
+                Some(detail) => format!("{}\n\n{}", gettext("Could not connect to the server."), detail),
+                // No source chain: fall back to the raw error rather than nothing.
+                None => reason.to_string(),
+            }
+        }
+    }
 }
 
 mod imp {
@@ -156,12 +222,7 @@ mod imp {
             match output_event {
                 RdpOutputEvent::ConnectionFailure(reason) => {
                     self.obj().set_state(RdpState::Disconnected);
-                    let mut error_string = reason.to_string();
-                    let mut source = std::error::Error::source(&reason);
-                    while let Some(e) = source {
-                        error_string.push_str(&format!(": {e}"));
-                        source = e.source();
-                    }
+                    let error_string = friendly_connection_error(&reason);
                     self.obj()
                         .emit_by_name::<()>("connection-failed", &[&error_string]);
                 }

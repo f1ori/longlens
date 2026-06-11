@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-11 18:32+0000\n"
+"POT-Creation-Date: 2026-06-11 20:12+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -25,9 +25,7 @@ msgstr ""
 
 #: data/de.f1ori.longlens.desktop.in.in:8
 msgid "RDP;Remote;Desktop;Client;GTK;Windows;Server;Connection"
-msgstr ""
-"RDP;Remote;Fernzugriff;Fernwartung;Desktop;Remotedesktop;Client;GTK;Windows;"
-"Server;Verbindung"
+msgstr "RDP;Remote;Fernzugriff;Fernwartung;Desktop;Remotedesktop;Client;GTK;Windows;Server;Verbindung"
 
 #: data/de.f1ori.longlens.desktop.in.in:14
 msgid "New Window"
@@ -163,6 +161,26 @@ msgstr "Verbindungsfehler"
 #: src/destinations_page.rs:70 src/window.rs:89
 msgid "Close"
 msgstr "Schließen"
+
+#: src/rdp/mod.rs:89
+msgid ""
+"The username or password is incorrect. Please check your credentials and try "
+"again."
+msgstr ""
+"Benutzername oder Passwort ist falsch. Bitte überprüfen Sie Ihre "
+"Anmeldedaten und versuchen Sie es erneut."
+
+#: src/rdp/mod.rs:97
+msgid ""
+"Access was denied. The username or password may be incorrect, or this "
+"account is not allowed to connect."
+msgstr ""
+"Zugriff verweigert. Benutzername oder Passwort ist möglicherweise falsch "
+"oder dieses Konto darf keine Verbindung herstellen."
+
+#: src/rdp/mod.rs:112
+msgid "Could not connect to the server."
+msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
 #: src/window.rs:170
 msgid "Disconnect?"

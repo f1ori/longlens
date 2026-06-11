@@ -1,5 +1,6 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
+data/de.f1ori.longlens.desktop.in.in
 data/ui/destination_dialog.blp
 data/ui/destination_row.blp
 data/ui/destinations_page.blp

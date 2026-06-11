@@ -5,3 +5,4 @@ builddir/
 .claude/
 src/config.rs
 repo/
+po/longlens.pot

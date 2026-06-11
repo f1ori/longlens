@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-10 19:55+0000\n"
+"POT-Creation-Date: 2026-06-11 18:32+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -18,6 +18,20 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Gtranslator 50.0\n"
+
+#: data/de.f1ori.longlens.desktop.in.in:2
+msgid "@APP_NAME@"
+msgstr ""
+
+#: data/de.f1ori.longlens.desktop.in.in:8
+msgid "RDP;Remote;Desktop;Client;GTK;Windows;Server;Connection"
+msgstr ""
+"RDP;Remote;Fernzugriff;Fernwartung;Desktop;Remotedesktop;Client;GTK;Windows;"
+"Server;Verbindung"
+
+#: data/de.f1ori.longlens.desktop.in.in:14
+msgid "New Window"
+msgstr "Neues Fenster"
 
 #. Translators: Big label button to create the first destination if none exists
 #: data/ui/destination_dialog.blp:5 data/ui/window.blp:47

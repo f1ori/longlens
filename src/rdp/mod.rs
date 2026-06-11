@@ -132,6 +132,7 @@ mod imp {
         resize_timeout: RefCell<Option<glib::SourceId>>,
         clipboard_context: OnceCell<clip::SharedClipboardContext>,
         gtk_clipboard_tx: OnceCell<async_channel::Sender<String>>,
+        cancel_token: RefCell<Option<tokio_util::sync::CancellationToken>>,
     }
 
     #[glib::object_subclass]
@@ -209,11 +210,25 @@ mod imp {
 
             let relay_tx = self.output_relay.get().unwrap().clone();
 
-            session::spawn_rdp_session(config, input_rx, cliprdr_factory, dvc_factory, relay_tx);
+            let cancel_token = tokio_util::sync::CancellationToken::new();
+            *self.cancel_token.borrow_mut() = Some(cancel_token.clone());
+
+            session::spawn_rdp_session(
+                config, input_rx, cliprdr_factory, dvc_factory, relay_tx, cancel_token,
+            );
         }
 
         pub fn disconnect(&self) {
-            if let Some(sender) = self.input_sender.borrow().as_ref() {
+            // While connecting, the worker thread is still in the handshake and
+            // never reads the input channel, so a graceful `Close` would sit
+            // unhandled until the handshake finishes. Cancel the connection
+            // attempt directly instead. Once connected we send `Close` so the
+            // session can shut down gracefully.
+            if self.obj().state() == RdpState::Connecting {
+                if let Some(token) = self.cancel_token.borrow().as_ref() {
+                    token.cancel();
+                }
+            } else if let Some(sender) = self.input_sender.borrow().as_ref() {
                 let _ = sender.send(RdpInputEvent::Close);
             }
         }

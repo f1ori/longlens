@@ -76,17 +76,7 @@ configure_file(
 
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 
-blueprints = custom_target('blueprints',
-  input: files(
-    'ui/destination_dialog.blp',
-    'ui/destination_row.blp',
-    'ui/destinations_page.blp',
-    'ui/password_dialog.blp',
-    'ui/window.blp',
-  ),
-  output: '.',
-  command: [find_program('blueprint-compiler'), 'batch-compile', '@OUTPUT@', '@CURRENT_SOURCE_DIR@', '@INPUT@'],
-)
+subdir('ui')
 
 gresource_xml = configure_file(
   input: 'de.f1ori.longlens.gresource.xml.in',

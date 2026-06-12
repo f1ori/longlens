@@ -501,7 +501,9 @@ mod imp {
                                 return glib::Propagation::Proceed;
                             }
                             let (dx, dy) = scroll_event.deltas();
-                            for operation in input::scroll_operations(dx, dy) {
+                            for operation in
+                                input::scroll_operations(dx, dy, scroll_event.unit())
+                            {
                                 imp.send_input_operation(operation);
                             }
                             glib::Propagation::Stop

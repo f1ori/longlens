@@ -52,18 +52,33 @@ pub fn key_scancode(keycode: u16) -> Option<Scancode> {
 /// Builds the wheel-rotation operations for a scroll event's deltas. Returns up
 /// to two operations (horizontal and/or vertical); sub-threshold deltas are
 /// dropped. The vertical delta is inverted to match RDP's wheel direction.
-pub fn scroll_operations(dx: f64, dy: f64) -> SmallVec<[Operation; 2]> {
+///
+/// The `unit` selects how deltas are scaled: [`gdk::ScrollUnit::Wheel`] deltas
+/// are in notches (1.0 == one notch), while [`gdk::ScrollUnit::Surface`] deltas
+/// are in pixels and are converted to wheel rotations via [`PIXELS_PER_NOTCH`].
+pub fn scroll_operations(dx: f64, dy: f64, unit: gdk::ScrollUnit) -> SmallVec<[Operation; 2]> {
+    // RDP uses 120 rotation units per wheel notch (WHEEL_DELTA).
+    const WHEEL_DELTA: f64 = 120.0;
+    // Approximate pixels covered by one wheel notch, used to convert
+    // pixel-precise (touchpad) scrolling into wheel rotations.
+    const PIXELS_PER_NOTCH: f64 = 50.0;
+
+    let factor = match unit {
+        gdk::ScrollUnit::Wheel => WHEEL_DELTA,
+        _ => WHEEL_DELTA / PIXELS_PER_NOTCH, // Surface (pixel) unit
+    };
+
     let mut ops: SmallVec<[Operation; 2]> = smallvec![];
     if dx.abs() > 0.001 {
         ops.push(Operation::WheelRotations(WheelRotations {
             is_vertical: false,
-            rotation_units: (dx * 120.0) as i16,
+            rotation_units: (dx * factor) as i16,
         }));
     }
     if dy.abs() > 0.001 {
         ops.push(Operation::WheelRotations(WheelRotations {
             is_vertical: true,
-            rotation_units: (-dy * 120.0) as i16,
+            rotation_units: (-dy * factor) as i16,
         }));
     }
     ops
@@ -87,13 +102,13 @@ mod tests {
 
     #[test]
     fn scroll_below_threshold_is_empty() {
-        assert!(scroll_operations(0.0, 0.0).is_empty());
-        assert!(scroll_operations(0.0005, -0.0005).is_empty());
+        assert!(scroll_operations(0.0, 0.0, gdk::ScrollUnit::Wheel).is_empty());
+        assert!(scroll_operations(0.0005, -0.0005, gdk::ScrollUnit::Wheel).is_empty());
     }
 
     #[test]
     fn scroll_vertical_is_inverted() {
-        let ops = scroll_operations(0.0, 1.0);
+        let ops = scroll_operations(0.0, 1.0, gdk::ScrollUnit::Wheel);
         assert_eq!(ops.len(), 1);
         let Operation::WheelRotations(w) = ops[0] else {
             panic!("expected wheel rotation");
@@ -104,7 +119,7 @@ mod tests {
 
     #[test]
     fn scroll_horizontal_not_inverted() {
-        let ops = scroll_operations(1.0, 0.0);
+        let ops = scroll_operations(1.0, 0.0, gdk::ScrollUnit::Wheel);
         assert_eq!(ops.len(), 1);
         let Operation::WheelRotations(w) = ops[0] else {
             panic!("expected wheel rotation");
@@ -115,7 +130,19 @@ mod tests {
 
     #[test]
     fn scroll_both_axes() {
-        let ops = scroll_operations(1.0, 1.0);
+        let ops = scroll_operations(1.0, 1.0, gdk::ScrollUnit::Wheel);
         assert_eq!(ops.len(), 2);
+    }
+
+    #[test]
+    fn scroll_pixel_unit_is_scaled_down() {
+        // A 50px scroll (PIXELS_PER_NOTCH) maps to one full notch (120 units).
+        let ops = scroll_operations(0.0, 50.0, gdk::ScrollUnit::Surface);
+        assert_eq!(ops.len(), 1);
+        let Operation::WheelRotations(w) = ops[0] else {
+            panic!("expected wheel rotation");
+        };
+        assert!(w.is_vertical);
+        assert_eq!(w.rotation_units, -120);
     }
 }

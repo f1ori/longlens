@@ -11,6 +11,6 @@ foreach name : [
   blueprints += custom_target(name + '.ui',
     input: name + '.blp',
     output: name + '.ui',
-    command: [blueprint_compiler, 'compile', '--output', '@OUTPUT@', '@INPUT@'],
+    command: [blueprint_compiler, 'compile', '--minify', '--output', '@OUTPUT@', '@INPUT@'],
   )
 endforeach

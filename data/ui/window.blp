@@ -8,7 +8,7 @@ template $LongLensWindow: Adw.ApplicationWindow {
 
   content: Adw.ToolbarView {
     [top]
-    Adw.HeaderBar {
+    Adw.HeaderBar headerbar {
       Button disconnectbutton {
         icon-name: "application-exit-symbolic-rtl";
         tooltip-text: _("Disconnect");
@@ -29,60 +29,101 @@ template $LongLensWindow: Adw.ApplicationWindow {
         primary: true;
         tooltip-text: _("Main Menu");
       }
+
+      [end]
+      Button fullscreenbutton {
+        icon-name: "view-fullscreen-symbolic";
+        tooltip-text: _("Fullscreen");
+        visible: false;
+        clicked => $handle_fullscreenbutton_clicked() swapped;
+      }
     }
 
-    Stack stack {
-      transition-type: slide_left_right;
+    Overlay {
+      Stack stack {
+        transition-type: slide_left_right;
 
-      StackPage {
-        name: "emptypage";
+        StackPage {
+          name: "emptypage";
 
-        child: Adw.StatusPage {
-          icon-name: "preferences-desktop-remote-desktop-symbolic";
-          title: _("No destinations");
+          child: Adw.StatusPage {
+            icon-name: "preferences-desktop-remote-desktop-symbolic";
+            title: _("No destinations");
 
-          child: Gtk.Button {
-            css-classes: ["suggested-action", "pill"];
-            // Translators: Big label button to create the first destination if none exists
-            label: _("Add Destination");
-            halign: center;
-            clicked => $handle_adddestinationbutton_clicked() swapped;
+            child: Gtk.Button {
+              css-classes: ["suggested-action", "pill"];
+              // Translators: Big label button to create the first destination if none exists
+              label: _("Add Destination");
+              halign: center;
+              clicked => $handle_adddestinationbutton_clicked() swapped;
+            };
           };
-        };
+        }
+
+        StackPage {
+          name: "destinationspage";
+
+          child: $LlDestinationPage destinations_page {
+          };
+        }
+
+        StackPage {
+          name: "connectingpage";
+
+          child: Gtk.Box {
+            orientation: vertical;
+            valign: center;
+            halign: center;
+            spacing: 12;
+
+            Adw.Spinner {
+              width-request: 32;
+              height-request: 32;
+            }
+
+            Gtk.Label {
+              label: _("Connecting…");
+            }
+          };
+        }
+
+        StackPage rdppage {
+          name: "rdppage";
+
+          child: $IronRdpWidget rdpwidget {
+            connection-failed => $handle_connection_failed() swapped;
+          };
+        }
       }
 
-      StackPage {
-        name: "destinationspage";
+      [overlay]
+      Revealer fullscreen_bar_revealer {
+        valign: start;
+        halign: center;
+        can-target: true;
+        transition-type: slide_down;
+        reveal-child: false;
 
-        child: $LlDestinationPage destinations_page {
-        };
-      }
+        child: Box fullscreen_bar {
+          css-classes: ["osd", "toolbar"];
+          spacing: 6;
 
-      StackPage {
-        name: "connectingpage";
-
-        child: Gtk.Box {
-          orientation: vertical;
-          valign: center;
-          halign: center;
-          spacing: 12;
-
-          Adw.Spinner {
-            width-request: 32;
-            height-request: 32;
+          Button leavefullscreenbutton {
+            icon-name: "view-restore-symbolic";
+            tooltip-text: _("Leave fullscreen");
+            clicked => $handle_leavefullscreenbutton_clicked() swapped;
           }
 
-          Gtk.Label {
-            label: _("Connecting…");
+          Label fullscreen_title {
+            ellipsize: end;
+            hexpand: true;
           }
-        };
-      }
 
-      StackPage rdppage {
-        name: "rdppage";
-
-        child: $IronRdpWidget rdpwidget {
-          connection-failed => $handle_connection_failed() swapped;
+          Button closebutton {
+            icon-name: "window-close-symbolic";
+            tooltip-text: _("Close");
+            clicked => $handle_closebutton_clicked() swapped;
+          }
         };
       }
     }

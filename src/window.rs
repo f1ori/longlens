@@ -64,12 +64,23 @@ mod imp {
         #[template_child]
         pub destinations_page: TemplateChild<LlDestinationPage>,
         #[template_child]
+        pub headerbar: TemplateChild<adw::HeaderBar>,
+        #[template_child]
         pub disconnectbutton: TemplateChild<gtk::Button>,
         #[template_child]
         pub adddestinationbutton: TemplateChild<gtk::Button>,
         #[template_child]
+        pub fullscreenbutton: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub fullscreen_bar_revealer: TemplateChild<gtk::Revealer>,
+        #[template_child]
+        pub fullscreen_bar: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub fullscreen_title: TemplateChild<gtk::Label>,
+        #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
         pub connection_display_title: RefCell<String>,
+        pub hide_timer: RefCell<Option<glib::SourceId>>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -88,6 +99,53 @@ mod imp {
             let dialog = adw::AlertDialog::new(Some(&gettext("Connection error")), Some(&reason));
             dialog.add_response("close", &gettext("Close"));
             dialog.present(Some(&*self.obj()));
+        }
+
+        #[template_callback]
+        fn handle_fullscreenbutton_clicked(&self, _button: &gtk::Button) {
+            self.obj().fullscreen();
+        }
+
+        #[template_callback]
+        fn handle_leavefullscreenbutton_clicked(&self, _button: &gtk::Button) {
+            self.obj().unfullscreen();
+        }
+
+        #[template_callback]
+        fn handle_closebutton_clicked(&self, _button: &gtk::Button) {
+            self.obj().close();
+        }
+    }
+
+    impl LongLensWindow {
+        /// Reveals the auto-hiding fullscreen bar and (re)starts the hide timer.
+        fn reveal_bar(&self) {
+            self.fullscreen_bar_revealer.set_reveal_child(true);
+            self.schedule_hide();
+        }
+
+        /// Cancels any pending hide and schedules the bar to hide after a delay.
+        fn schedule_hide(&self) {
+            self.cancel_hide();
+            let source = glib::timeout_add_local_once(
+                std::time::Duration::from_secs(3),
+                glib::clone!(
+                    #[weak(rename_to = imp)]
+                    self,
+                    move || {
+                        imp.fullscreen_bar_revealer.set_reveal_child(false);
+                        imp.hide_timer.borrow_mut().take();
+                    }
+                ),
+            );
+            *self.hide_timer.borrow_mut() = Some(source);
+        }
+
+        /// Cancels a pending hide timer, if any.
+        fn cancel_hide(&self) {
+            if let Some(source) = self.hide_timer.borrow_mut().take() {
+                source.remove();
+            }
         }
     }
 
@@ -127,6 +185,73 @@ mod imp {
                 })
                 .sync_create()
                 .build();
+            self.rdpwidget
+                .bind_property::<gtk::Button>("state", self.fullscreenbutton.as_ref(), "visible")
+                .transform_to(|_binding, value: glib::Value| {
+                    let state = value.get::<RdpState>().unwrap_or_default();
+                    Some(state == RdpState::Connected)
+                })
+                .sync_create()
+                .build();
+            self.obj()
+                .bind_property::<gtk::Label>("title", self.fullscreen_title.as_ref(), "label")
+                .sync_create()
+                .build();
+
+            // Hide the headerbar and reveal the auto-hiding control bar while
+            // fullscreen; restore the headerbar when leaving fullscreen.
+            self.obj().connect_fullscreened_notify(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |obj| {
+                    let fullscreen = obj.is_fullscreen();
+                    window.headerbar.set_visible(!fullscreen);
+                    if fullscreen {
+                        window.reveal_bar();
+                    } else {
+                        window.cancel_hide();
+                        window.fullscreen_bar_revealer.set_reveal_child(false);
+                    }
+                }
+            ));
+
+            // Re-reveal the bar when the pointer hits the top-center edge.
+            let edge_motion = gtk::EventControllerMotion::new();
+            edge_motion.set_propagation_phase(gtk::PropagationPhase::Capture);
+            edge_motion.connect_motion(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_controller, x, y| {
+                    let obj = window.obj();
+                    if !obj.is_fullscreen() {
+                        return;
+                    }
+                    let width = obj.width() as f64;
+                    if y <= 5.0 && (x - width / 2.0).abs() <= 150.0 {
+                        window.reveal_bar();
+                    }
+                }
+            ));
+            self.obj().add_controller(edge_motion);
+
+            // Keep the bar visible while the pointer hovers it.
+            let bar_motion = gtk::EventControllerMotion::new();
+            bar_motion.connect_enter(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_controller, _x, _y| {
+                    window.cancel_hide();
+                }
+            ));
+            bar_motion.connect_leave(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_controller| {
+                    window.schedule_hide();
+                }
+            ));
+            self.fullscreen_bar.add_controller(bar_motion);
+
             self.rdpwidget.connect_state_notify(glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -142,6 +267,9 @@ mod imp {
                     } else {
                         obj.set_title(Some(&gettext("Long Lens")));
                         crate::utils::set_shortcuts_inhibited(&*obj, false);
+                        if obj.is_fullscreen() {
+                            obj.unfullscreen();
+                        }
                     }
                 }
             ));

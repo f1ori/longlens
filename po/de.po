@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-11 20:12+0000\n"
+"POT-Creation-Date: 2026-06-12 19:54+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -32,13 +32,13 @@ msgid "New Window"
 msgstr "Neues Fenster"
 
 #. Translators: Big label button to create the first destination if none exists
-#: data/ui/destination_dialog.blp:5 data/ui/window.blp:47
+#: data/ui/destination_dialog.blp:5 data/ui/window.blp:56
 #: src/destination_dialog.rs:179
 msgid "Add Destination"
 msgstr "Ziel hinzufügen"
 
 #: data/ui/destination_dialog.blp:14 data/ui/password_dialog.blp:14
-#: src/window.rs:173
+#: src/window.rs:301
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -106,7 +106,7 @@ msgstr "Host"
 msgid "Long Lens"
 msgstr "Long Lens"
 
-#: data/ui/window.blp:14 src/window.rs:174
+#: data/ui/window.blp:14 src/window.rs:302
 msgid "Disconnect"
 msgstr "Trennen"
 
@@ -118,35 +118,47 @@ msgstr "Ziel hinzufügen"
 msgid "Main Menu"
 msgstr "Hauptmenü"
 
-#: data/ui/window.blp:42
+#: data/ui/window.blp:36
+msgid "Fullscreen"
+msgstr "Vollbild"
+
+#: data/ui/window.blp:51
 msgid "No destinations"
 msgstr "Keine Ziele"
 
-#: data/ui/window.blp:76
+#: data/ui/window.blp:85
 msgid "Connecting…"
 msgstr "Verbinde…"
 
-#: data/ui/window.blp:96
+#: data/ui/window.blp:113
+msgid "Leave fullscreen"
+msgstr "Vollbild verlassen"
+
+#: data/ui/window.blp:124 src/destinations_page.rs:70 src/window.rs:100
+msgid "Close"
+msgstr "Schließen"
+
+#: data/ui/window.blp:137
 msgid "_New Window"
 msgstr "_Neues Fenster"
 
-#: data/ui/window.blp:102
+#: data/ui/window.blp:143
 msgid "_Theme"
 msgstr "_Erscheinungsbild"
 
-#: data/ui/window.blp:106
+#: data/ui/window.blp:147
 msgid "_System Default"
 msgstr "_Systemstandard"
 
-#: data/ui/window.blp:112
+#: data/ui/window.blp:153
 msgid "_Light"
 msgstr "_Hell"
 
-#: data/ui/window.blp:118
+#: data/ui/window.blp:159
 msgid "_Dark"
 msgstr "_Dunkel"
 
-#: data/ui/window.blp:127
+#: data/ui/window.blp:168
 msgid "_About Long Lens"
 msgstr "_Über Long Lens"
 
@@ -154,13 +166,9 @@ msgstr "_Über Long Lens"
 msgid "Edit Destination"
 msgstr "Ziel bearbeiten"
 
-#: src/destinations_page.rs:69 src/window.rs:88
+#: src/destinations_page.rs:69 src/window.rs:99
 msgid "Connection error"
 msgstr "Verbindungsfehler"
-
-#: src/destinations_page.rs:70 src/window.rs:89
-msgid "Close"
-msgstr "Schließen"
 
 #: src/rdp/mod.rs:89
 msgid ""
@@ -182,11 +190,11 @@ msgstr ""
 msgid "Could not connect to the server."
 msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
-#: src/window.rs:170
+#: src/window.rs:298
 msgid "Disconnect?"
 msgstr "Trennen?"
 
-#: src/window.rs:171
+#: src/window.rs:299
 msgid ""
 "You are currently connected to a remote session. Do you want to disconnect "
 "and close?"

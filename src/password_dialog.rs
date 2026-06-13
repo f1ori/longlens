@@ -14,9 +14,9 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
-        pub hostnamerow: TemplateChild<adw::ActionRow>,
+        pub hostnamelabel: TemplateChild<gtk::Label>,
         #[template_child]
-        pub usernamerow: TemplateChild<adw::ActionRow>,
+        pub usernamelabel: TemplateChild<gtk::Label>,
         pub on_connect: RefCell<Option<Box<dyn Fn(SecretString) + 'static>>>,
     }
 
@@ -92,11 +92,11 @@ impl LongLensPasswordDialog {
     }
 
     pub fn set_hostname(&self, hostname: &str) {
-        self.imp().hostnamerow.set_subtitle(hostname);
+        self.imp().hostnamelabel.set_label(hostname);
     }
 
     pub fn set_username(&self, username: &str) {
-        self.imp().usernamerow.set_subtitle(username);
+        self.imp().usernamelabel.set_label(username);
     }
 
     pub fn set_on_connect(&self, callback: impl Fn(SecretString) + 'static) {

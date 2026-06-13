@@ -69,6 +69,17 @@
   </screenshots>
 
   <releases>
+    <release version="0.2.0" date="2026-06-13">
+      <description translate="no">
+        <p>Second beta release</p>
+        <ul>
+          <li>Added fullscreen mode</li>
+          <li>Improved password dialog</li>
+          <li>Fixed touchpad scrolling</li>
+          <li>Added german translation</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-06">
       <description translate="no">
         <p>First beta release</p>

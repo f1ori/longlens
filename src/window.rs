@@ -81,6 +81,7 @@ mod imp {
         pub rdpwidget: TemplateChild<IronRdpWidget>,
         pub connection_display_title: RefCell<String>,
         pub hide_timer: RefCell<Option<glib::SourceId>>,
+        pub bar_motion: RefCell<Option<gtk::EventControllerMotion>>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -133,8 +134,21 @@ mod imp {
                     #[weak(rename_to = imp)]
                     self,
                     move || {
-                        imp.fullscreen_bar_revealer.set_reveal_child(false);
                         imp.hide_timer.borrow_mut().take();
+                        // Don't hide while the pointer is still hovering the bar;
+                        // re-arm instead. This also covers the case where the bar
+                        // was revealed under a motionless pointer (edge trigger),
+                        // which never emits an `enter` event.
+                        let hovered = imp
+                            .bar_motion
+                            .borrow()
+                            .as_ref()
+                            .is_some_and(|c| c.contains_pointer());
+                        if hovered {
+                            imp.schedule_hide();
+                        } else {
+                            imp.fullscreen_bar_revealer.set_reveal_child(false);
+                        }
                     }
                 ),
             );
@@ -250,7 +264,8 @@ mod imp {
                     window.schedule_hide();
                 }
             ));
-            self.fullscreen_bar.add_controller(bar_motion);
+            self.fullscreen_bar.add_controller(bar_motion.clone());
+            *self.bar_motion.borrow_mut() = Some(bar_motion);
 
             self.rdpwidget.connect_state_notify(glib::clone!(
                 #[weak(rename_to = window)]

@@ -22,7 +22,7 @@
         {
             "label": "Setup builddir",
             "type": "shell",
-            "command": "meson setup builddir --reconfigure --prefix=${workspaceFolder}/builddir/install/ -Dprofile=development",
+            "command": "meson setup builddir --reconfigure --prefix=${workspaceFolder}/builddir/install/ -Dprofile=development --buildtype=release",
             "problemMatcher": []
         },
         {

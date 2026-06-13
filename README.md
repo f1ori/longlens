@@ -13,12 +13,14 @@ A simple, minimal, and modern RDP client
   <img src="data/screenshots/screenshot2.png" width="45%" alt="Screenshot 2">
 </div>
 
-* Minimal UI to manage a list of favorite connections
+* Clean, minimal UI for managing a list of favorite connections
 * Minimal UI for remote sessions
-* Passwords stored in keyring
-* Clipboard synchronization
+* One window per active session
+* Passwords stored in the system keyring
+* Clipboard synchronization between host and remote
 * GNOME Search Provider for destinations (can be enabled in GNOME Settings)
-* Supports HighDPI displays
+* High-DPI display support
+* Fullscreen mode
 
 ## How to install
 

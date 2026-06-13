@@ -29,6 +29,7 @@ use std::cell::RefCell;
 use crate::model::destination_object::DestinationObject;
 use crate::rdp::{IronRdpWidget, RdpState};
 use crate::destinations_page::LlDestinationPage;
+use crate::fullscreen_bar::LlFullscreenBar;
 use crate::password_dialog::LongLensPasswordDialog;
 
 fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
@@ -72,16 +73,10 @@ mod imp {
         #[template_child]
         pub fullscreenbutton: TemplateChild<gtk::Button>,
         #[template_child]
-        pub fullscreen_bar_revealer: TemplateChild<gtk::Revealer>,
-        #[template_child]
-        pub fullscreen_bar: TemplateChild<gtk::Box>,
-        #[template_child]
-        pub fullscreen_title: TemplateChild<gtk::Label>,
+        pub fullscreen_bar: TemplateChild<LlFullscreenBar>,
         #[template_child]
         pub rdpwidget: TemplateChild<IronRdpWidget>,
         pub connection_display_title: RefCell<String>,
-        pub hide_timer: RefCell<Option<glib::SourceId>>,
-        pub bar_motion: RefCell<Option<gtk::EventControllerMotion>>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -105,61 +100,6 @@ mod imp {
         #[template_callback]
         fn handle_fullscreenbutton_clicked(&self, _button: &gtk::Button) {
             self.obj().fullscreen();
-        }
-
-        #[template_callback]
-        fn handle_leavefullscreenbutton_clicked(&self, _button: &gtk::Button) {
-            self.obj().unfullscreen();
-        }
-
-        #[template_callback]
-        fn handle_closebutton_clicked(&self, _button: &gtk::Button) {
-            self.obj().close();
-        }
-    }
-
-    impl LongLensWindow {
-        /// Reveals the auto-hiding fullscreen bar and (re)starts the hide timer.
-        fn reveal_bar(&self) {
-            self.fullscreen_bar_revealer.set_reveal_child(true);
-            self.schedule_hide();
-        }
-
-        /// Cancels any pending hide and schedules the bar to hide after a delay.
-        fn schedule_hide(&self) {
-            self.cancel_hide();
-            let source = glib::timeout_add_local_once(
-                std::time::Duration::from_secs(3),
-                glib::clone!(
-                    #[weak(rename_to = imp)]
-                    self,
-                    move || {
-                        imp.hide_timer.borrow_mut().take();
-                        // Don't hide while the pointer is still hovering the bar;
-                        // re-arm instead. This also covers the case where the bar
-                        // was revealed under a motionless pointer (edge trigger),
-                        // which never emits an `enter` event.
-                        let hovered = imp
-                            .bar_motion
-                            .borrow()
-                            .as_ref()
-                            .is_some_and(|c| c.contains_pointer());
-                        if hovered {
-                            imp.schedule_hide();
-                        } else {
-                            imp.fullscreen_bar_revealer.set_reveal_child(false);
-                        }
-                    }
-                ),
-            );
-            *self.hide_timer.borrow_mut() = Some(source);
-        }
-
-        /// Cancels a pending hide timer, if any.
-        fn cancel_hide(&self) {
-            if let Some(source) = self.hide_timer.borrow_mut().take() {
-                source.remove();
-            }
         }
     }
 
@@ -208,7 +148,7 @@ mod imp {
                 .sync_create()
                 .build();
             self.obj()
-                .bind_property::<gtk::Label>("title", self.fullscreen_title.as_ref(), "label")
+                .bind_property::<LlFullscreenBar>("title", self.fullscreen_bar.as_ref(), "title")
                 .sync_create()
                 .build();
 
@@ -221,51 +161,12 @@ mod imp {
                     let fullscreen = obj.is_fullscreen();
                     window.headerbar.set_visible(!fullscreen);
                     if fullscreen {
-                        window.reveal_bar();
+                        window.fullscreen_bar.reveal();
                     } else {
-                        window.cancel_hide();
-                        window.fullscreen_bar_revealer.set_reveal_child(false);
+                        window.fullscreen_bar.hide();
                     }
                 }
             ));
-
-            // Re-reveal the bar when the pointer hits the top-center edge.
-            let edge_motion = gtk::EventControllerMotion::new();
-            edge_motion.set_propagation_phase(gtk::PropagationPhase::Capture);
-            edge_motion.connect_motion(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |_controller, x, y| {
-                    let obj = window.obj();
-                    if !obj.is_fullscreen() {
-                        return;
-                    }
-                    let width = obj.width() as f64;
-                    if y <= 5.0 && (x - width / 2.0).abs() <= 150.0 {
-                        window.reveal_bar();
-                    }
-                }
-            ));
-            self.obj().add_controller(edge_motion);
-
-            // Keep the bar visible while the pointer hovers it.
-            let bar_motion = gtk::EventControllerMotion::new();
-            bar_motion.connect_enter(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |_controller, _x, _y| {
-                    window.cancel_hide();
-                }
-            ));
-            bar_motion.connect_leave(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |_controller| {
-                    window.schedule_hide();
-                }
-            ));
-            self.fullscreen_bar.add_controller(bar_motion.clone());
-            *self.bar_motion.borrow_mut() = Some(bar_motion);
 
             self.rdpwidget.connect_state_notify(glib::clone!(
                 #[weak(rename_to = window)]

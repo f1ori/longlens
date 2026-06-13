@@ -4,6 +4,7 @@
     <file compressed="true" preprocess="xml-stripblanks">ui/destination_dialog.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/destination_row.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/destinations_page.ui</file>
+    <file compressed="true" preprocess="xml-stripblanks">ui/fullscreen_bar.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/password_dialog.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/window.ui</file>
     <file>@APP_ID@.metainfo.xml</file>

@@ -4,6 +4,7 @@ data/de.f1ori.longlens.desktop.in.in
 data/ui/destination_dialog.blp
 data/ui/destination_row.blp
 data/ui/destinations_page.blp
+data/ui/fullscreen_bar.blp
 data/ui/password_dialog.blp
 data/ui/window.blp
 src/destination_dialog.rs

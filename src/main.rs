@@ -29,6 +29,7 @@ mod secrets;
 mod config;
 mod model;
 mod destinations_page;
+mod fullscreen_bar;
 mod rdp;
 mod window;
 mod utils;

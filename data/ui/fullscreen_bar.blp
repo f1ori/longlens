@@ -1,0 +1,34 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $LlFullscreenBar: Adw.Bin {
+  Revealer revealer {
+    valign: start;
+    halign: center;
+    can-target: true;
+    transition-type: slide_down;
+    reveal-child: false;
+
+    child: Box bar {
+      css-classes: ["osd", "toolbar"];
+      spacing: 6;
+
+      Button {
+        icon-name: "view-restore-symbolic";
+        tooltip-text: _("Leave fullscreen");
+        clicked => $handle_leave_clicked() swapped;
+      }
+
+      Label title {
+        ellipsize: end;
+        hexpand: true;
+      }
+
+      Button {
+        icon-name: "window-close-symbolic";
+        tooltip-text: _("Close");
+        action-name: "window.close";
+      }
+    };
+  }
+}

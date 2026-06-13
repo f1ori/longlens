@@ -97,34 +97,9 @@ template $LongLensWindow: Adw.ApplicationWindow {
       }
 
       [overlay]
-      Revealer fullscreen_bar_revealer {
+      $LlFullscreenBar fullscreen_bar {
         valign: start;
         halign: center;
-        can-target: true;
-        transition-type: slide_down;
-        reveal-child: false;
-
-        child: Box fullscreen_bar {
-          css-classes: ["osd", "toolbar"];
-          spacing: 6;
-
-          Button leavefullscreenbutton {
-            icon-name: "view-restore-symbolic";
-            tooltip-text: _("Leave fullscreen");
-            clicked => $handle_leavefullscreenbutton_clicked() swapped;
-          }
-
-          Label fullscreen_title {
-            ellipsize: end;
-            hexpand: true;
-          }
-
-          Button closebutton {
-            icon-name: "window-close-symbolic";
-            tooltip-text: _("Close");
-            clicked => $handle_closebutton_clicked() swapped;
-          }
-        };
       }
     }
   };

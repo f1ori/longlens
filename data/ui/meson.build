@@ -5,6 +5,7 @@ foreach name : [
   'destination_dialog',
   'destination_row',
   'destinations_page',
+  'fullscreen_bar',
   'password_dialog',
   'window',
 ]

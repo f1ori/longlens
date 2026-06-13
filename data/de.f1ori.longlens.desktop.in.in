@@ -1,11 +1,12 @@
 [Desktop Entry]
 Name=@APP_NAME@
-Exec=longlens
+Exec=longlens %U
 Icon=@APP_ID@
 Terminal=false
 Type=Application
 Categories=Utility;
 Keywords=RDP;Remote;Desktop;Client;GTK;Windows;Server;Connection
+MimeType=application/x-rdp;
 StartupNotify=true
 DBusActivatable=true
 Actions=new-window;

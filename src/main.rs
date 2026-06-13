@@ -28,6 +28,7 @@ mod search_provider;
 mod secrets;
 mod config;
 mod model;
+mod rdp_file;
 mod destinations_page;
 mod fullscreen_bar;
 mod rdp;
@@ -64,7 +65,7 @@ fn main() -> glib::ExitCode {
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
     let app =
-        LongLensApplication::new(APP_ID, &gio::ApplicationFlags::empty());
+        LongLensApplication::new(APP_ID, &gio::ApplicationFlags::HANDLES_OPEN);
 
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This

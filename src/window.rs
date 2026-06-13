@@ -69,7 +69,7 @@ mod imp {
         #[template_child]
         pub disconnectbutton: TemplateChild<gtk::Button>,
         #[template_child]
-        pub adddestinationbutton: TemplateChild<gtk::Button>,
+        pub adddestinationbutton: TemplateChild<adw::SplitButton>,
         #[template_child]
         pub fullscreenbutton: TemplateChild<gtk::Button>,
         #[template_child]
@@ -86,7 +86,7 @@ mod imp {
         }
 
         #[template_callback]
-        fn handle_adddestinationbutton_clicked(&self, _button: &gtk::Button) {
+        fn handle_adddestinationbutton_clicked(&self, _button: &adw::SplitButton) {
             self.destinations_page.show_add_dialog();
         }
 
@@ -132,7 +132,7 @@ mod imp {
                 .sync_create()
                 .build();
             self.rdpwidget
-                .bind_property::<gtk::Button>("state", self.adddestinationbutton.as_ref(), "visible")
+                .bind_property::<adw::SplitButton>("state", self.adddestinationbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
                     Some(state != RdpState::Connected && state != RdpState::Connecting)
@@ -294,7 +294,57 @@ impl LongLensWindow {
                 ));
             })
             .build();
-        self.add_action_entries([action_connect]);
+
+        let action_add_from_rdp = gio::ActionEntry::builder("add-from-rdp-file")
+            .activate(move |window: &Self, _action, _parameter| {
+                let filter = gtk::FileFilter::new();
+                filter.set_name(Some(&gettext("RDP Files")));
+                filter.add_pattern("*.rdp");
+                let filters = gio::ListStore::new::<gtk::FileFilter>();
+                filters.append(&filter);
+
+                let dialog = gtk::FileDialog::builder()
+                    .title(gettext("Open .rdp File"))
+                    .filters(&filters)
+                    .default_filter(&filter)
+                    .build();
+                dialog.open(
+                    Some(window),
+                    gio::Cancellable::NONE,
+                    glib::clone!(
+                        #[weak]
+                        window,
+                        move |result| {
+                            let Ok(file) = result else {
+                                return;
+                            };
+                            match file.path().as_deref().and_then(crate::rdp_file::parse_file) {
+                                Some(conn) => window.show_add_from_rdp(conn),
+                                None => window.show_rdp_file_error(),
+                            }
+                        }
+                    ),
+                );
+            })
+            .build();
+
+        self.add_action_entries([action_connect, action_add_from_rdp]);
+    }
+
+    /// Open the Add Destination dialog pre-filled from a parsed `.rdp` file.
+    pub fn show_add_from_rdp(&self, conn: crate::rdp_file::RdpConnection) {
+        self.imp()
+            .destinations_page
+            .show_add_dialog_with(conn.name, conn.hostname, conn.username);
+    }
+
+    fn show_rdp_file_error(&self) {
+        let dialog = adw::AlertDialog::new(
+            Some(&gettext("Could not open .rdp file")),
+            Some(&gettext("The file could not be read or contains no valid connection.")),
+        );
+        dialog.add_response("close", &gettext("Close"));
+        dialog.present(Some(self));
     }
 
     fn start_connection(&self, hostname: String, username: String, password: SecretString, display_title: String) {

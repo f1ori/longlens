@@ -16,9 +16,10 @@ template $LongLensWindow: Adw.ApplicationWindow {
         clicked => $handle_disconnectbutton_clicked() swapped;
       }
 
-      Button adddestinationbutton {
+      Adw.SplitButton adddestinationbutton {
         icon-name: "list-add-symbolic";
         tooltip-text: _("Add destination");
+        menu-model: add_menu;
         clicked => $handle_adddestinationbutton_clicked() swapped;
       }
 
@@ -103,6 +104,13 @@ template $LongLensWindow: Adw.ApplicationWindow {
       }
     }
   };
+}
+
+menu add_menu {
+  item {
+    action: "win.add-from-rdp-file";
+    label: _("Add from .rdp File");
+  }
 }
 
 menu primary_menu {

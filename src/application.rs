@@ -100,6 +100,34 @@ mod imp {
                 window.present();
             }
         }
+
+        // Invoked when the application is launched with files to open (e.g. a
+        // `.rdp` file from the file manager). We present a window and open the
+        // Add Destination dialog pre-filled from each parsable file.
+        fn open(&self, files: &[gio::File], _hint: &str) {
+            let application = self.obj();
+            let window = LongLensWindow::new(&*application);
+            window.present();
+
+            let connections: Vec<_> = files
+                .iter()
+                .filter_map(|file| file.path())
+                .filter_map(|path| crate::rdp_file::parse_file(&path))
+                .collect();
+
+            if connections.is_empty() {
+                return;
+            }
+
+            let window_weak = window.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(window) = window_weak.upgrade() {
+                    for conn in connections {
+                        window.show_add_from_rdp(conn);
+                    }
+                }
+            });
+        }
     }
 
     impl GtkApplicationImpl for LongLensApplication {}

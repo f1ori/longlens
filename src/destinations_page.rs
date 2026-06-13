@@ -282,7 +282,16 @@ impl LlDestinationPage {
     }
 
     pub fn show_add_dialog(&self) {
+        self.show_add_dialog_with(String::new(), String::new(), String::new());
+    }
+
+    /// Show the Add Destination dialog pre-filled with the given values, e.g.
+    /// from a parsed `.rdp` file. Empty strings leave the corresponding fields blank.
+    pub fn show_add_dialog_with(&self, name: String, hostname: String, username: String) {
         let dialog = LongLensDestinationDialog::new();
+        dialog.imp().nameentry.set_text(&name);
+        dialog.imp().hostnameentry.set_text(&hostname);
+        dialog.imp().usernameentry.set_text(&username);
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = page)]
             self,

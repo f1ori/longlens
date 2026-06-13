@@ -41,6 +41,11 @@ appstreamcli = find_program('appstreamcli', required: false, disabler: true)
 test('Validate appstream file', appstreamcli,
      args: ['validate', '--no-net', '--explain', appstream_file])
 
+install_data(
+  'de.f1ori.longlens.mime.xml',
+  install_dir: get_option('datadir') / 'mime' / 'packages',
+)
+
 gschema_file = configure_file(
   input: 'de.f1ori.longlens.gschema.xml.in',
   output: application_id + '.gschema.xml',

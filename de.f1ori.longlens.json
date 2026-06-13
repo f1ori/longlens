@@ -41,6 +41,7 @@
             "name" : "longlens",
             "builddir" : true,
             "buildsystem" : "meson",
+            "run-tests" : true,
             "config-opts" : [
                 "--buildtype=release"
             ],

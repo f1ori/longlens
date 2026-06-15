@@ -46,6 +46,12 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 
+/// How long to wait for a graceful disconnect to complete before forcibly
+/// dropping the connection. The graceful path writes a disconnect PDU to the
+/// server; if the network is gone that write can block on a dead socket for a
+/// long time, so this watchdog guarantees the session always terminates.
+const GRACEFUL_DISCONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
 #[enum_type(name = "RdpState")]
 pub enum RdpState {
@@ -133,6 +139,7 @@ mod imp {
         clipboard_context: OnceCell<clip::SharedClipboardContext>,
         gtk_clipboard_tx: OnceCell<async_channel::Sender<String>>,
         cancel_token: RefCell<Option<tokio_util::sync::CancellationToken>>,
+        disconnect_timeout: RefCell<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -181,6 +188,9 @@ mod imp {
 
             // Gracefully close any existing connection
             self.disconnect();
+            // Drop any watchdog the cleanup above may have armed for the old
+            // session so it cannot fire against this new connection.
+            self.clear_disconnect_watchdog();
 
             self.obj().set_state(RdpState::Connecting);
 
@@ -230,6 +240,53 @@ mod imp {
                 }
             } else if let Some(sender) = self.input_sender.borrow().as_ref() {
                 let _ = sender.send(RdpInputEvent::Close);
+                // The graceful `Close` makes the worker write a disconnect PDU
+                // to the server. If the network is gone that write blocks on a
+                // dead socket and the session would never terminate, so arm a
+                // watchdog that force-drops the connection if it has not shut
+                // down gracefully in time.
+                self.arm_disconnect_watchdog();
+            }
+        }
+
+        /// Schedules a forced disconnect if the graceful shutdown does not
+        /// complete within [`GRACEFUL_DISCONNECT_TIMEOUT`]. Cancelling the token
+        /// drops the client future (closing the socket) and reports a terminal
+        /// event back to the UI.
+        ///
+        /// The watchdog captures the current session's token by value so that a
+        /// watchdog left over from a previous session can never cancel a newer
+        /// connection's token.
+        fn arm_disconnect_watchdog(&self) {
+            self.clear_disconnect_watchdog();
+
+            let Some(token) = self.cancel_token.borrow().clone() else {
+                return;
+            };
+
+            let source_id = glib::timeout_add_local_once(
+                GRACEFUL_DISCONNECT_TIMEOUT,
+                glib::clone!(
+                    #[weak(rename_to = imp)]
+                    self,
+                    move || {
+                        *imp.disconnect_timeout.borrow_mut() = None;
+                        if !token.is_cancelled() {
+                            warn!("Graceful disconnect timed out; forcing connection drop");
+                            token.cancel();
+                        }
+                    }
+                ),
+            );
+
+            *self.disconnect_timeout.borrow_mut() = Some(source_id);
+        }
+
+        /// Cancels a pending disconnect watchdog. Called once the session has
+        /// actually terminated so the watchdog cannot fire afterwards.
+        fn clear_disconnect_watchdog(&self) {
+            if let Some(source_id) = self.disconnect_timeout.borrow_mut().take() {
+                source_id.remove();
             }
         }
 
@@ -243,10 +300,12 @@ mod imp {
                 }
                 RdpOutputEvent::Terminated(Ok(reason)) => {
                     info!("Session terminated: {}", reason);
+                    self.clear_disconnect_watchdog();
                     self.obj().set_state(RdpState::Disconnected);
                 }
                 RdpOutputEvent::Terminated(Err(e)) => {
                     warn!("Session error: {}", e);
+                    self.clear_disconnect_watchdog();
                     self.obj().set_state(RdpState::Disconnected);
                 }
                 RdpOutputEvent::Image { buffer, width, height } => {

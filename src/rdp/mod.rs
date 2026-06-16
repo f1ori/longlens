@@ -516,60 +516,58 @@ mod imp {
             self.obj().add_controller(event_controller_motion);
         }
 
-        /// Sets up the legacy event controller translating mouse button and
-        /// scroll events into RDP input operations. Key events are routed
-        /// separately through [`IronRdpWidget::send_key`] from a capture-phase
-        /// controller on the toplevel window, so they can preempt GTK's own
-        /// keyboard bindings (accelerators, mnemonics, the F10 primary menu).
+        /// Sets up the event controllers translating mouse button and scroll
+        /// events into RDP input operations. Key events are routed separately
+        /// through [`IronRdpWidget::send_key`] from a capture-phase controller
+        /// on the toplevel window, so they can preempt GTK's own keyboard
+        /// bindings (accelerators, mnemonics, the F10 primary menu).
         fn setup_input_controller(&self) {
-            let event_controller = gtk::EventControllerLegacy::new();
-            event_controller.connect_event(glib::clone!(
+            // `GestureClick` listens to button 1 only by default; button 0
+            // makes it report every button so the right/middle buttons that
+            // `input::mouse_button` maps reach us too.
+            let gesture_click = gtk::GestureClick::new();
+            gesture_click.set_button(0);
+            gesture_click.connect_pressed(glib::clone!(
+                #[weak(rename_to=imp)]
+                self,
+                move |gesture, _n_press, _x, _y| {
+                    let Some(mouse_button) = input::mouse_button(gesture.current_button())
+                    else {
+                        return;
+                    };
+                    imp.send_input_operation(Operation::MouseButtonPressed(mouse_button));
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+            ));
+            gesture_click.connect_released(glib::clone!(
+                #[weak(rename_to=imp)]
+                self,
+                move |gesture, _n_press, _x, _y| {
+                    let Some(mouse_button) = input::mouse_button(gesture.current_button())
+                    else {
+                        return;
+                    };
+                    imp.send_input_operation(Operation::MouseButtonReleased(mouse_button));
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+            ));
+            self.obj().add_controller(gesture_click);
+
+            let scroll_controller =
+                gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
+            scroll_controller.connect_scroll(glib::clone!(
                 #[weak(rename_to=imp)]
                 self,
                 #[upgrade_or]
                 glib::Propagation::Proceed,
-                move |_controller, event: &gdk::Event| -> glib::Propagation {
-                    match event.event_type() {
-                        gdk::EventType::ButtonRelease | gdk::EventType::ButtonPress => {
-                            let button_event =
-                                event.clone().downcast::<gdk::ButtonEvent>().unwrap();
-                            let Some(mouse_button) = input::mouse_button(button_event.button())
-                            else {
-                                return glib::Propagation::Proceed;
-                            };
-                            let operation = match event.event_type() {
-                                gdk::EventType::ButtonPress => {
-                                    Operation::MouseButtonPressed(mouse_button)
-                                }
-                                gdk::EventType::ButtonRelease => {
-                                    Operation::MouseButtonReleased(mouse_button)
-                                }
-                                _ => {
-                                    return glib::Propagation::Proceed;
-                                }
-                            };
-                            imp.send_input_operation(operation);
-                            glib::Propagation::Stop
-                        }
-                        gdk::EventType::Scroll => {
-                            let scroll_event =
-                                event.clone().downcast::<gdk::ScrollEvent>().unwrap();
-                            if scroll_event.is_stop() {
-                                return glib::Propagation::Proceed;
-                            }
-                            let (dx, dy) = scroll_event.deltas();
-                            for operation in
-                                input::scroll_operations(dx, dy, scroll_event.unit())
-                            {
-                                imp.send_input_operation(operation);
-                            }
-                            glib::Propagation::Stop
-                        }
-                        _ => glib::Propagation::Proceed,
+                move |controller, dx, dy| -> glib::Propagation {
+                    for operation in input::scroll_operations(dx, dy, controller.unit()) {
+                        imp.send_input_operation(operation);
                     }
+                    glib::Propagation::Stop
                 }
             ));
-            self.obj().add_controller(event_controller);
+            self.obj().add_controller(scroll_controller);
         }
     }
 

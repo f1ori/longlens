@@ -336,6 +336,21 @@ mod imp {
             }
         }
 
+        /// Translates a hardware keycode into an RDP scancode and sends the
+        /// matching key press or release to the remote host. Unknown keycodes
+        /// are ignored (with a warning logged by [`input::key_scancode`]).
+        pub fn send_key(&self, keycode: u16, pressed: bool) {
+            let Some(scancode) = input::key_scancode(keycode) else {
+                return;
+            };
+            let operation = if pressed {
+                Operation::KeyPressed(scancode)
+            } else {
+                Operation::KeyReleased(scancode)
+            };
+            self.send_input_operation(operation);
+        }
+
         fn send_input_operation(&self, operation: Operation) {
             let input_events = self
                 .input_database
@@ -501,8 +516,11 @@ mod imp {
             self.obj().add_controller(event_controller_motion);
         }
 
-        /// Sets up the legacy event controller translating mouse button, key and
-        /// scroll events into RDP input operations.
+        /// Sets up the legacy event controller translating mouse button and
+        /// scroll events into RDP input operations. Key events are routed
+        /// separately through [`IronRdpWidget::send_key`] from a capture-phase
+        /// controller on the toplevel window, so they can preempt GTK's own
+        /// keyboard bindings (accelerators, mnemonics, the F10 primary menu).
         fn setup_input_controller(&self) {
             let event_controller = gtk::EventControllerLegacy::new();
             event_controller.connect_event(glib::clone!(
@@ -525,26 +543,6 @@ mod imp {
                                 }
                                 gdk::EventType::ButtonRelease => {
                                     Operation::MouseButtonReleased(mouse_button)
-                                }
-                                _ => {
-                                    return glib::Propagation::Proceed;
-                                }
-                            };
-                            imp.send_input_operation(operation);
-                            glib::Propagation::Stop
-                        }
-                        gdk::EventType::KeyPress | gdk::EventType::KeyRelease => {
-                            let key_event = event.clone().downcast::<gdk::KeyEvent>().unwrap();
-                            let keycode: u16 = key_event.keycode().try_into().unwrap();
-                            let Some(scancode) = input::key_scancode(keycode) else {
-                                return glib::Propagation::Proceed;
-                            };
-                            let operation = match event.event_type() {
-                                gdk::EventType::KeyPress => {
-                                    Operation::KeyPressed(scancode)
-                                }
-                                gdk::EventType::KeyRelease => {
-                                    Operation::KeyReleased(scancode)
                                 }
                                 _ => {
                                     return glib::Propagation::Proceed;
@@ -681,5 +679,11 @@ impl IronRdpWidget {
 
     pub fn disconnect(&self) {
         self.imp().disconnect();
+    }
+
+    /// Forwards a key press (`pressed = true`) or release to the remote host,
+    /// translating the GDK hardware `keycode` into an RDP scancode.
+    pub fn send_key(&self, keycode: u16, pressed: bool) {
+        self.imp().send_key(keycode, pressed);
     }
 }

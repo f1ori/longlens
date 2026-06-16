@@ -101,6 +101,43 @@ mod imp {
         fn handle_fullscreenbutton_clicked(&self, _button: &gtk::Button) {
             self.obj().fullscreen();
         }
+
+        /// Installs a capture-phase key controller on the window that forwards
+        /// every key to the RDP widget while its surface holds the focus.
+        ///
+        /// Running in the capture phase on the toplevel lets it preempt GTK's
+        /// own keyboard handling — accelerators, mnemonics and the F10 primary
+        /// menu — which would otherwise swallow keys like F10 before they could
+        /// reach the remote session. Gating on the RDP widget's focus keeps the
+        /// local UI fully keyboard-navigable whenever the pointer leaves the
+        /// remote surface (which drops its focus).
+        fn setup_key_grab(&self) {
+            let controller = gtk::EventControllerKey::new();
+            controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+            controller.connect_key_pressed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_controller, _keyval, keycode, _state| {
+                    if !window.rdpwidget.has_focus() {
+                        return glib::Propagation::Proceed;
+                    }
+                    window.rdpwidget.send_key(keycode as u16, true);
+                    glib::Propagation::Stop
+                }
+            ));
+            controller.connect_key_released(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_controller, _keyval, keycode, _state| {
+                    if window.rdpwidget.has_focus() {
+                        window.rdpwidget.send_key(keycode as u16, false);
+                    }
+                }
+            ));
+            self.obj().add_controller(controller);
+        }
     }
 
     #[glib::object_subclass]
@@ -200,6 +237,7 @@ mod imp {
                 }
             ));
             self.obj().setup_actions();
+            self.setup_key_grab();
         }
     }
     impl WidgetImpl for LongLensWindow {}

@@ -86,7 +86,7 @@ mod imp {
         }
 
         #[template_callback]
-        fn handle_adddestinationbutton_clicked(&self, _button: &adw::SplitButton) {
+        fn handle_adddestinationbutton_clicked(&self, _button: &gtk::Widget) {
             self.destinations_page.show_add_dialog();
         }
 
@@ -396,4 +396,3 @@ impl LongLensWindow {
             .connect_to_server(server, port, username, password, width, height);
     }
 }
-

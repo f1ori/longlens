@@ -17,7 +17,6 @@ A simple, minimal, and modern RDP client
 * Minimal UI for remote sessions
 * One window per active session
 * Passwords stored in the system keyring
-* Clipboard synchronization between host and remote
 * GNOME Search Provider for destinations (can be enabled in GNOME Settings)
 * High-DPI display support
 * Fullscreen mode
@@ -33,6 +32,8 @@ The flatpak repository contains released versions and nightly development builds
 Also can be built with GNOME Builder
 
 ### VSCode and devcontainer
+
+FreeRDP 3.27.1 development libraries are required for system builds.
 
     meson setup builddir --prefix=/workspaces/longlens/builddir/install/ -Dprofile=development
     meson compile -C builddir

@@ -37,6 +37,8 @@
         "*.a"
     ],
     "modules" : [
+        "build-aux/openssl.json",
+        "build-aux/freerdp.json",
         {
             "name" : "longlens",
             "builddir" : true,

@@ -19,7 +19,6 @@
  */
 
 mod about_dialog;
-mod clipboard;
 mod destination_dialog;
 mod destination_row;
 mod password_dialog;

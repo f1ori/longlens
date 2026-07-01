@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-13 12:59+0000\n"
+"POT-Creation-Date: 2026-07-01 05:20+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -38,7 +38,7 @@ msgid "Add Destination"
 msgstr "Ziel hinzufügen"
 
 #: data/ui/destination_dialog.blp:14 data/ui/password_dialog.blp:14
-#: src/window.rs:217
+#: src/rdp/mod.rs:336 src/window.rs:255
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -95,7 +95,7 @@ msgid "Leave fullscreen"
 msgstr "Vollbild verlassen"
 
 #: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:70 src/window.rs:96
-#: src/window.rs:346
+#: src/window.rs:384
 msgid "Close"
 msgstr "Schließen"
 
@@ -115,7 +115,7 @@ msgstr "Host"
 msgid "Long Lens"
 msgstr "Long Lens"
 
-#: data/ui/window.blp:14 src/window.rs:218
+#: data/ui/window.blp:14 src/window.rs:256
 msgid "Disconnect"
 msgstr "Trennen"
 
@@ -175,7 +175,7 @@ msgstr "Ziel bearbeiten"
 msgid "Connection error"
 msgstr "Verbindungsfehler"
 
-#: src/rdp/mod.rs:89
+#: src/rdp/mod.rs:41
 msgid ""
 "The username or password is incorrect. Please check your credentials and try "
 "again."
@@ -183,7 +183,7 @@ msgstr ""
 "Benutzername oder Passwort ist falsch. Bitte überprüfen Sie Ihre "
 "Anmeldedaten und versuchen Sie es erneut."
 
-#: src/rdp/mod.rs:97
+#: src/rdp/mod.rs:44
 msgid ""
 "Access was denied. The username or password may be incorrect, or this "
 "account is not allowed to connect."
@@ -191,15 +191,71 @@ msgstr ""
 "Zugriff verweigert. Benutzername oder Passwort ist möglicherweise falsch "
 "oder dieses Konto darf keine Verbindung herstellen."
 
-#: src/rdp/mod.rs:112
+#: src/rdp/mod.rs:56
 msgid "Could not connect to the server."
 msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
-#: src/window.rs:214
+#: src/rdp/mod.rs:147
+msgid "Could not initialize FreeRDP."
+msgstr "FreeRDP konnte nicht initialisiert werden."
+
+#: src/rdp/mod.rs:284
+msgid "The server certificate has changed"
+msgstr "Das Serverzertifikat hat sich geändert"
+
+#: src/rdp/mod.rs:286
+msgid "Untrusted server certificate"
+msgstr "Nicht vertrauenswürdiges Serverzertifikat"
+
+#: src/rdp/mod.rs:290
+msgid "Server"
+msgstr "Server"
+
+#: src/rdp/mod.rs:293
+msgid "Subject"
+msgstr "Inhaber"
+
+#: src/rdp/mod.rs:295
+msgid "Issuer"
+msgstr "Aussteller"
+
+#: src/rdp/mod.rs:297
+msgid "Fingerprint"
+msgstr "Fingerabdruck"
+
+#: src/rdp/mod.rs:303
+msgid "Common name"
+msgstr "Allgemeiner Name"
+
+#: src/rdp/mod.rs:310
+msgid "The certificate name does not match this server."
+msgstr "Der Zertifikatsname stimmt nicht mit diesem Server überein."
+
+#: src/rdp/mod.rs:316
+msgid "Previous fingerprint"
+msgstr "Vorheriger Fingerabdruck"
+
+#: src/rdp/mod.rs:323
+msgid "Previous subject"
+msgstr "Vorheriger Inhaber"
+
+#: src/rdp/mod.rs:330
+msgid "Previous issuer"
+msgstr "Vorheriger Aussteller"
+
+#: src/rdp/mod.rs:337
+msgid "Trust Once"
+msgstr "Einmal vertrauen"
+
+#: src/rdp/mod.rs:338
+msgid "Trust and Remember"
+msgstr "Vertrauen und merken"
+
+#: src/window.rs:252
 msgid "Disconnect?"
 msgstr "Trennen?"
 
-#: src/window.rs:215
+#: src/window.rs:253
 msgid ""
 "You are currently connected to a remote session. Do you want to disconnect "
 "and close?"
@@ -207,21 +263,22 @@ msgstr ""
 "Sie sind derzeit mit einer Remote-Sitzung verbunden. Möchten Sie die "
 "Verbindung trennen und schließen?"
 
-#: src/window.rs:301
+#: src/window.rs:339
 msgid "RDP Files"
 msgstr "RDP-Dateien"
 
-#: src/window.rs:307
+#: src/window.rs:345
 msgid "Open .rdp File"
 msgstr ".rdp-Datei öffnen"
 
-#: src/window.rs:343
+#: src/window.rs:381
 msgid "Could not open .rdp file"
 msgstr ".rdp-Datei konnte nicht geöffnet werden"
 
-#: src/window.rs:344
+#: src/window.rs:382
 msgid "The file could not be read or contains no valid connection."
-msgstr "Die Datei konnte nicht gelesen werden oder enthält keine gültige Verbindung."
+msgstr ""
+"Die Datei konnte nicht gelesen werden oder enthält keine gültige Verbindung."
 
 #~ msgid "Destination deleted"
 #~ msgstr "Ziel gelöscht"

@@ -27,7 +27,7 @@ use secrecy::SecretString;
 use std::cell::RefCell;
 
 use crate::model::destination_object::DestinationObject;
-use crate::rdp::{IronRdpWidget, RdpState};
+use crate::rdp::{RdpState, RdpWidget};
 use crate::destinations_page::LlDestinationPage;
 use crate::fullscreen_bar::LlFullscreenBar;
 use crate::password_dialog::LongLensPasswordDialog;
@@ -75,7 +75,7 @@ mod imp {
         #[template_child]
         pub fullscreen_bar: TemplateChild<LlFullscreenBar>,
         #[template_child]
-        pub rdpwidget: TemplateChild<IronRdpWidget>,
+        pub rdpwidget: TemplateChild<RdpWidget>,
         pub connection_display_title: RefCell<String>,
     }
     #[gtk::template_callbacks]

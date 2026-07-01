@@ -1,6 +1,8 @@
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 gnome = import('gnome')
 
+dependency('freerdp-client3', version: '>= 3.27.1')
+
 
 vcs_tag = run_command('git', 'rev-parse', '--short', 'HEAD', check: false).stdout().strip()
 if vcs_tag == ''

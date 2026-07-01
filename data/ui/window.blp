@@ -91,7 +91,7 @@ template $LongLensWindow: Adw.ApplicationWindow {
         StackPage rdppage {
           name: "rdppage";
 
-          child: $IronRdpWidget rdpwidget {
+          child: $RdpWidget rdpwidget {
             connection-failed => $handle_connection_failed() swapped;
           };
         }

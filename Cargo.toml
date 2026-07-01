@@ -2,18 +2,14 @@
 name = "longlens"
 version = "0.4.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 gtk = { version = "0.11", package = "gtk4", features = ["v4_22"] }
 gdk = { version = "0.11", package = "gdk4", features = ["v4_22"] }
 adw = { version = "0.9.1", package = "libadwaita", features = ["v1_9"] }
-ironrdp-client = { git = "https://github.com/Devolutions/IronRDP", rev = "3905d177f2417d0e810b437d7e3ee0a7e954c6cc" }
-ironrdp = { git = "https://github.com/Devolutions/IronRDP", rev = "3905d177f2417d0e810b437d7e3ee0a7e954c6cc", features = ["input", "connector", "cliprdr"] }
-ironrdp-rdpfile = { git = "https://github.com/Devolutions/IronRDP", rev = "3905d177f2417d0e810b437d7e3ee0a7e954c6cc" }
-tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7" }
-softbuffer = "0.4"
+tokio = { version = "1", features = ["sync"] }
 
 # Logging
 tracing = { version = "0.1", features = ["log"] }
@@ -24,12 +20,13 @@ anyhow = "1"
 keycode = "1"
 semver = "1"
 tap = "1"
-whoami = "1.6"
 async-channel = "2.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1", features = ["v4"] }
-smallvec = "1.15"
 secrecy = "0.8"
 oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
 
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

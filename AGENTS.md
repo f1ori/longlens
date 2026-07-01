@@ -1,8 +1,9 @@
 # Long Lens
 
-A minimal RDP client based on Rust, GTK4 and IronRDP.
+A minimal RDP client based on Rust, GTK4 and FreeRDP.
 
-We use the ironrdp-client library. A reference application for this library is in ironrdp-viewer.
+We use the installed FreeRDP 3 client libraries through the C adapter in
+`src/rdp/freerdp_bridge.c`.
 
 It uses blueprint files (blp) to describe the UI.
 

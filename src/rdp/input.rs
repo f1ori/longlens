@@ -18,70 +18,78 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-//! Pure translation of GDK input into IronRDP input operations.
+//! Pure translation of GDK input into FreeRDP input flags.
 
 use gtk::gdk;
-use ironrdp::input::{MouseButton, Operation, Scancode, WheelRotations};
-use smallvec::{SmallVec, smallvec};
 use tracing::warn;
 
-/// Maps a GDK mouse button number to the RDP mouse button, or `None` for
-/// buttons we don't forward.
-pub fn mouse_button(gdk_button: u32) -> Option<MouseButton> {
+pub const PTR_FLAGS_HWHEEL: u16 = 0x0400;
+pub const PTR_FLAGS_WHEEL: u16 = 0x0200;
+pub const PTR_FLAGS_WHEEL_NEGATIVE: u16 = 0x0100;
+pub const PTR_FLAGS_MOVE: u16 = 0x0800;
+pub const PTR_FLAGS_DOWN: u16 = 0x8000;
+pub const PTR_FLAGS_BUTTON1: u16 = 0x1000;
+pub const PTR_FLAGS_BUTTON2: u16 = 0x2000;
+pub const PTR_FLAGS_BUTTON3: u16 = 0x4000;
+
+pub fn mouse_button(gdk_button: u32) -> Option<u16> {
     match gdk_button {
-        gdk::BUTTON_PRIMARY => Some(MouseButton::Left),
-        gdk::BUTTON_SECONDARY => Some(MouseButton::Right),
-        gdk::BUTTON_MIDDLE => Some(MouseButton::Middle),
+        gdk::BUTTON_PRIMARY => Some(PTR_FLAGS_BUTTON1),
+        gdk::BUTTON_SECONDARY => Some(PTR_FLAGS_BUTTON2),
+        gdk::BUTTON_MIDDLE => Some(PTR_FLAGS_BUTTON3),
         _ => None,
     }
 }
 
-/// Translates an XKB keycode into a Windows RDP scancode, or `None` (with a
-/// warning) if the keycode is unknown.
-pub fn key_scancode(keycode: u16) -> Option<Scancode> {
-    let map = keycode::KeyMap::from_key_mapping(keycode::KeyMapping::Xkb(keycode));
-    match map {
-        Ok(map) => Some(Scancode::from_u16(map.win)),
+/// Translate an XKB keycode to the scancode form accepted by FreeRDP.
+pub fn key_scancode(keycode: u16) -> Option<u32> {
+    match keycode::KeyMap::from_key_mapping(keycode::KeyMapping::Xkb(keycode)) {
+        Ok(map) => {
+            let win = u32::from(map.win);
+            Some(match win & 0xff00 {
+                0xe000 => (win & 0xff) | 0x0100,
+                0xe100 => (win & 0xff) | 0x0200,
+                _ => win,
+            })
+        }
         Err(_) => {
-            warn!("Unknown keycode {}", keycode);
+            warn!("Unknown keycode {keycode}");
             None
         }
     }
 }
 
-/// Builds the wheel-rotation operations for a scroll event's deltas. Returns up
-/// to two operations (horizontal and/or vertical); sub-threshold deltas are
-/// dropped. The vertical delta is inverted to match RDP's wheel direction.
-///
-/// The `unit` selects how deltas are scaled: [`gdk::ScrollUnit::Wheel`] deltas
-/// are in notches (1.0 == one notch), while [`gdk::ScrollUnit::Surface`] deltas
-/// are in pixels and are converted to wheel rotations via [`PIXELS_PER_NOTCH`].
-pub fn scroll_operations(dx: f64, dy: f64, unit: gdk::ScrollUnit) -> SmallVec<[Operation; 2]> {
-    // RDP uses 120 rotation units per wheel notch (WHEEL_DELTA).
+/// Return FreeRDP wheel flags for each non-zero scroll axis.
+pub fn scroll_flags(dx: f64, dy: f64, unit: gdk::ScrollUnit) -> Vec<u16> {
     const WHEEL_DELTA: f64 = 120.0;
-    // Approximate pixels covered by one wheel notch, used to convert
-    // pixel-precise (touchpad) scrolling into wheel rotations.
     const PIXELS_PER_NOTCH: f64 = 50.0;
-
     let factor = match unit {
         gdk::ScrollUnit::Wheel => WHEEL_DELTA,
-        _ => WHEEL_DELTA / PIXELS_PER_NOTCH, // Surface (pixel) unit
+        _ => WHEEL_DELTA / PIXELS_PER_NOTCH,
     };
 
-    let mut ops: SmallVec<[Operation; 2]> = smallvec![];
+    let mut result = Vec::with_capacity(2);
     if dx.abs() > 0.001 {
-        ops.push(Operation::WheelRotations(WheelRotations {
-            is_vertical: false,
-            rotation_units: (dx * factor) as i16,
-        }));
+        result.push(wheel_flags(dx * factor, true));
     }
     if dy.abs() > 0.001 {
-        ops.push(Operation::WheelRotations(WheelRotations {
-            is_vertical: true,
-            rotation_units: (-dy * factor) as i16,
-        }));
+        result.push(wheel_flags(-dy * factor, false));
     }
-    ops
+    result
+}
+
+fn wheel_flags(rotation: f64, horizontal: bool) -> u16 {
+    let rotation = (rotation as i32).clamp(-255, 255);
+    let axis = if horizontal {
+        PTR_FLAGS_HWHEEL
+    } else {
+        PTR_FLAGS_WHEEL
+    };
+    if rotation < 0 {
+        axis | PTR_FLAGS_WHEEL_NEGATIVE | ((0x100 + rotation) as u16)
+    } else {
+        axis | rotation as u16
+    }
 }
 
 #[cfg(test)]
@@ -89,60 +97,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mouse_button_known() {
-        assert_eq!(mouse_button(gdk::BUTTON_PRIMARY), Some(MouseButton::Left));
-        assert_eq!(mouse_button(gdk::BUTTON_SECONDARY), Some(MouseButton::Right));
-        assert_eq!(mouse_button(gdk::BUTTON_MIDDLE), Some(MouseButton::Middle));
-    }
-
-    #[test]
-    fn mouse_button_unknown() {
+    fn mouse_buttons() {
+        assert_eq!(mouse_button(gdk::BUTTON_PRIMARY), Some(PTR_FLAGS_BUTTON1));
+        assert_eq!(mouse_button(gdk::BUTTON_SECONDARY), Some(PTR_FLAGS_BUTTON2));
+        assert_eq!(mouse_button(gdk::BUTTON_MIDDLE), Some(PTR_FLAGS_BUTTON3));
         assert_eq!(mouse_button(8), None);
     }
 
     #[test]
-    fn scroll_below_threshold_is_empty() {
-        assert!(scroll_operations(0.0, 0.0, gdk::ScrollUnit::Wheel).is_empty());
-        assert!(scroll_operations(0.0005, -0.0005, gdk::ScrollUnit::Wheel).is_empty());
+    fn keycodes_include_extended_flag() {
+        assert_eq!(key_scancode(38), Some(0x001e)); // A
+        assert_eq!(key_scancode(105), Some(0x011d)); // Right Control
     }
 
     #[test]
-    fn scroll_vertical_is_inverted() {
-        let ops = scroll_operations(0.0, 1.0, gdk::ScrollUnit::Wheel);
-        assert_eq!(ops.len(), 1);
-        let Operation::WheelRotations(w) = ops[0] else {
-            panic!("expected wheel rotation");
-        };
-        assert!(w.is_vertical);
-        assert_eq!(w.rotation_units, -120);
+    fn wheel_sign_and_axes() {
+        assert_eq!(
+            scroll_flags(0.0, 1.0, gdk::ScrollUnit::Wheel),
+            vec![PTR_FLAGS_WHEEL | PTR_FLAGS_WHEEL_NEGATIVE | (0x100 - 120)]
+        );
+        assert_eq!(
+            scroll_flags(1.0, 0.0, gdk::ScrollUnit::Wheel),
+            vec![PTR_FLAGS_HWHEEL | 120]
+        );
     }
 
     #[test]
-    fn scroll_horizontal_not_inverted() {
-        let ops = scroll_operations(1.0, 0.0, gdk::ScrollUnit::Wheel);
-        assert_eq!(ops.len(), 1);
-        let Operation::WheelRotations(w) = ops[0] else {
-            panic!("expected wheel rotation");
-        };
-        assert!(!w.is_vertical);
-        assert_eq!(w.rotation_units, 120);
-    }
-
-    #[test]
-    fn scroll_both_axes() {
-        let ops = scroll_operations(1.0, 1.0, gdk::ScrollUnit::Wheel);
-        assert_eq!(ops.len(), 2);
-    }
-
-    #[test]
-    fn scroll_pixel_unit_is_scaled_down() {
-        // A 50px scroll (PIXELS_PER_NOTCH) maps to one full notch (120 units).
-        let ops = scroll_operations(0.0, 50.0, gdk::ScrollUnit::Surface);
-        assert_eq!(ops.len(), 1);
-        let Operation::WheelRotations(w) = ops[0] else {
-            panic!("expected wheel rotation");
-        };
-        assert!(w.is_vertical);
-        assert_eq!(w.rotation_units, -120);
+    fn pixel_scroll_is_scaled() {
+        assert_eq!(
+            scroll_flags(0.0, 50.0, gdk::ScrollUnit::Surface),
+            vec![PTR_FLAGS_WHEEL | PTR_FLAGS_WHEEL_NEGATIVE | (0x100 - 120)]
+        );
     }
 }

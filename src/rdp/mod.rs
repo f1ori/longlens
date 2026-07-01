@@ -18,38 +18,25 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-//! The RDP display widget. This module holds the `IronRdpWidget` GObject and
-//! its GTK wiring; the pure logic it drives lives in the sibling submodules:
-//! [`config`] (connection config), [`input`] (event translation), [`render`]
-//! (framebuffer/cursor textures) and [`session`] (the worker thread).
+//! GTK widget and FreeRDP session integration.
 
 mod config;
+pub(crate) mod ffi;
 mod input;
 mod render;
 mod session;
 
-use ironrdp::cliprdr::backend::{ClipboardMessage, ClipboardMessageProxy};
-use ironrdp::cliprdr::pdu::{ClipboardFormat, ClipboardFormatId};
-use ironrdp::input::Operation;
-use ironrdp_client::rdp::{DvcPipeProxyFactory, RdpInputEvent, RdpOutputEvent};
-use crate::clipboard::{self as clip, ClientClipboardMessageProxy, GtkCliprdrBackendFactory};
-use ironrdp::connector::sspi::credssp::NStatusCode;
-use ironrdp::connector::sspi::ErrorKind as SspiErrorKind;
-use ironrdp::connector::{ConnectorError, ConnectorErrorKind};
 use gettextrs::gettext;
-use gtk::glib::prelude::*;
+use adw::prelude::*;
 use gtk::glib::subclass::Signal;
 use gtk::glib::{self, Properties};
-use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use std::cell::{Cell, OnceCell, RefCell};
-use std::sync::OnceLock;
-use tracing::{debug, info, warn};
+use std::cell::{Cell, RefCell};
+use std::sync::{OnceLock, mpsc};
+use tracing::{info, warn};
 
-/// How long to wait for a graceful disconnect to complete before forcibly
-/// dropping the connection. The graceful path writes a disconnect PDU to the
-/// server; if the network is gone that write can block on a dead socket for a
-/// long time, so this watchdog guarantees the session always terminates.
+use session::{CertificateDecision, CertificateDetails, ConnectionError, Session, SessionEvent};
+
 const GRACEFUL_DISCONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum, Default)]
@@ -61,64 +48,25 @@ pub enum RdpState {
     Connected = 2,
 }
 
-/// Translate a low-level [`ConnectorError`] into a short, user-facing message.
-///
-/// IronRDP reports connection problems as a chain of technical errors (e.g. a
-/// CredSSP/SSPI logon failure with a Windows status code). Surfacing that chain
-/// verbatim is confusing, so we map the common cases — above all wrong
-/// credentials — to friendly text and only fall back to the raw error chain for
-/// the unexpected ones.
-fn friendly_connection_error(reason: &ConnectorError) -> String {
-    // Network Level Authentication (CredSSP) reports a bad username/password as a
-    // generic `InvalidToken`, with the real cause in the Windows NTSTATUS code it
-    // carries (e.g. STATUS_LOGON_FAILURE). Match on that status — and on the SSPI
-    // error kinds that unambiguously mean "credentials rejected" — rather than on
-    // the opaque top-level error.
-    if let ConnectorErrorKind::Credssp(e) = reason.kind() {
-        let bad_credentials = matches!(
-            e.nstatus,
-            Some(
-                NStatusCode::LOGON_FAILURE
-                    | NStatusCode::WRONG_PASSWORD
-                    | NStatusCode::NO_SUCH_USER
-                    | NStatusCode::ACCOUNT_RESTRICTION
-            )
-        ) || matches!(
-            e.error_type,
-            SspiErrorKind::LogonDenied
-                | SspiErrorKind::UnknownCredentials
-                | SspiErrorKind::NoCredentials
-                | SspiErrorKind::WrongPrincipalName
-        );
-        if bad_credentials {
-            return gettext(
-                "The username or password is incorrect. Please check your credentials and try again.",
-            );
-        }
-    }
-
-    match reason.kind() {
-        // Server refused the logon (e.g. non-NLA path, account not permitted).
-        ConnectorErrorKind::AccessDenied => gettext(
+fn friendly_connection_error(error: &ConnectionError) -> String {
+    match error.class {
+        1 => gettext(
+            "The username or password is incorrect. Please check your credentials and try again.",
+        ),
+        2 => gettext(
             "Access was denied. The username or password may be incorrect, or this account is not allowed to connect.",
         ),
-        // Anything else (network failures, DNS lookup, protocol errors, …):
-        // show a friendly prefix plus the root-cause message. We deliberately
-        // skip the top-level `Display`, which prepends internal noise like
-        // "[TCP connect @ .../lib.rs:416] custom error:", and instead surface
-        // the deepest source (e.g. "Name or service not known").
         _ => {
-            let mut detail = None;
-            let mut source = std::error::Error::source(reason);
-            while let Some(e) = source {
-                detail = Some(e.to_string());
-                source = e.source();
-            }
-            match detail {
-                Some(detail) => format!("{}\n\n{}", gettext("Could not connect to the server."), detail),
-                // No source chain: fall back to the raw error rather than nothing.
-                None => reason.to_string(),
-            }
+            let detail = if error.message.is_empty() {
+                if error.name.is_empty() {
+                    format!("FreeRDP error 0x{:08x}", error.code)
+                } else {
+                    error.name.clone()
+                }
+            } else {
+                error.message.clone()
+            };
+            format!("{}\n\n{}", gettext("Could not connect to the server."), detail)
         }
     }
 }
@@ -127,46 +75,46 @@ mod imp {
     use super::*;
 
     #[derive(Properties, Default)]
-    #[properties(wrapper_type = super::IronRdpWidget)]
-    pub struct IronRdpWidget {
+    #[properties(wrapper_type = super::RdpWidget)]
+    pub struct RdpWidget {
         #[property(get, set, builder(RdpState::Disconnected))]
         state: Cell<RdpState>,
-        input_sender: RefCell<Option<tokio::sync::mpsc::UnboundedSender<RdpInputEvent>>>,
+        session: RefCell<Option<Session>>,
         texture: RefCell<Option<gdk::MemoryTexture>>,
-        input_database: OnceCell<RefCell<ironrdp::input::Database>>,
-        output_relay: OnceCell<async_channel::Sender<RdpOutputEvent>>,
         resize_timeout: RefCell<Option<glib::SourceId>>,
-        clipboard_context: OnceCell<clip::SharedClipboardContext>,
-        gtk_clipboard_tx: OnceCell<async_channel::Sender<String>>,
-        cancel_token: RefCell<Option<tokio_util::sync::CancellationToken>>,
         disconnect_timeout: RefCell<Option<glib::SourceId>>,
+        pending_certificate: RefCell<Option<mpsc::SyncSender<CertificateDecision>>>,
+        generation: Cell<u64>,
+        pointer_x: Cell<u16>,
+        pointer_y: Cell<u16>,
+        connection_scale: Cell<f64>,
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for IronRdpWidget {
-        const NAME: &'static str = "IronRdpWidget";
-        type Type = super::IronRdpWidget;
+    impl ObjectSubclass for RdpWidget {
+        const NAME: &'static str = "RdpWidget";
+        type Type = super::RdpWidget;
         type ParentType = gtk::Widget;
     }
 
-    impl IronRdpWidget {
+    impl RdpWidget {
         fn surface_scale(&self) -> f64 {
             self.obj()
                 .native()
-                .and_then(|n| n.surface())
-                .map(|s| s.scale())
+                .and_then(|native| native.surface())
+                .map(|surface| surface.scale())
                 .unwrap_or_else(|| self.obj().scale_factor() as f64)
         }
 
-        /// Converts a logical size into physical (scaled) pixels plus the
-        /// desktop scale factor in percent (e.g. `100` or `200`). Returns
-        /// `None` if the scaled dimensions don't fit in `u16`.
-        fn physical_size(&self, logical_width: f64, logical_height: f64) -> Option<(u16, u16, u32)> {
-            let scale_f = self.surface_scale();
-            let phys_width = u16::try_from((logical_width * scale_f).round() as i64).ok()?;
-            let phys_height = u16::try_from((logical_height * scale_f).round() as i64).ok()?;
-            let scale_factor = (scale_f * 100.0).round() as u32;
-            Some((phys_width, phys_height, scale_factor))
+        fn physical_size(
+            &self,
+            logical_width: f64,
+            logical_height: f64,
+        ) -> Option<(u16, u16, u32)> {
+            let scale = self.surface_scale();
+            let width = u16::try_from((logical_width * scale).round() as i64).ok()?;
+            let height = u16::try_from((logical_height * scale).round() as i64).ok()?;
+            Some((width, height, (scale * 100.0).round() as u32))
         }
 
         pub fn connect_to_server(
@@ -178,92 +126,74 @@ mod imp {
             width: u16,
             height: u16,
         ) {
-            info!("Connecting to {}:{} {}x{}", hostname, port, width, height);
-
-            let Some((phys_width, phys_height, scale_factor)) =
-                self.physical_size(width as f64, height as f64)
+            let Some((width, height, desktop_scale)) =
+                self.physical_size(width.into(), height.into())
             else {
                 return;
             };
+            info!("Connecting to {hostname}:{port} {width}x{height}");
 
-            // Gracefully close any existing connection
             self.disconnect();
-            // Drop any watchdog the cleanup above may have armed for the old
-            // session so it cannot fire against this new connection.
             self.clear_disconnect_watchdog();
+            *self.texture.borrow_mut() = None;
+            self.obj().queue_draw();
 
+            let generation = self.generation.get().wrapping_add(1);
+            self.generation.set(generation);
+            self.connection_scale.set(self.surface_scale());
             self.obj().set_state(RdpState::Connecting);
 
-            let Some(config) = config::build_config(
-                hostname, port, username, password, phys_width, phys_height, scale_factor,
-            ) else {
+            let config = config::build_config(
+                hostname,
+                port,
+                username,
+                password,
+                width,
+                height,
+                desktop_scale,
+            );
+            let (output, receiver) = async_channel::bounded(64);
+            let Some(session) = Session::spawn(config, output) else {
+                self.obj().set_state(RdpState::Disconnected);
+                self.obj().emit_by_name::<()>(
+                    "connection-failed",
+                    &[&gettext("Could not initialize FreeRDP.")],
+                );
                 return;
             };
+            *self.session.borrow_mut() = Some(session);
 
-            let (input_tx, input_rx) = RdpInputEvent::create_channel();
-            let dvc_factory = DvcPipeProxyFactory::new(input_tx.clone());
-
-            *self.input_sender.borrow_mut() = Some(input_tx.clone());
-
-            // Wire up clipboard: update the shared context with the new connection's proxy.
-            let cliprdr_factory: Option<Box<dyn ironrdp::cliprdr::backend::CliprdrBackendFactory + Send>> =
-                if let (Some(ctx), Some(gtk_tx)) = (
-                    self.clipboard_context.get(),
-                    self.gtk_clipboard_tx.get(),
-                ) {
-                    let proxy = ClientClipboardMessageProxy::new(input_tx.clone());
-                    ctx.lock().unwrap().proxy = Some(proxy);
-                    Some(Box::new(GtkCliprdrBackendFactory::new(ctx.clone(), gtk_tx.clone())))
-                } else {
-                    None
-                };
-
-            let relay_tx = self.output_relay.get().unwrap().clone();
-
-            let cancel_token = tokio_util::sync::CancellationToken::new();
-            *self.cancel_token.borrow_mut() = Some(cancel_token.clone());
-
-            session::spawn_rdp_session(
-                config, input_rx, cliprdr_factory, dvc_factory, relay_tx, cancel_token,
-            );
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    while let Ok(event) = receiver.recv().await {
+                        if imp.generation.get() != generation {
+                            break;
+                        }
+                        imp.process_event(event);
+                    }
+                }
+            ));
         }
 
         pub fn disconnect(&self) {
-            // While connecting, the worker thread is still in the handshake and
-            // never reads the input channel, so a graceful `Close` would sit
-            // unhandled until the handshake finishes. Cancel the connection
-            // attempt directly instead. Once connected we send `Close` so the
-            // session can shut down gracefully.
-            if self.obj().state() == RdpState::Connecting {
-                if let Some(token) = self.cancel_token.borrow().as_ref() {
-                    token.cancel();
-                }
-            } else if let Some(sender) = self.input_sender.borrow().as_ref() {
-                let _ = sender.send(RdpInputEvent::Close);
-                // The graceful `Close` makes the worker write a disconnect PDU
-                // to the server. If the network is gone that write blocks on a
-                // dead socket and the session would never terminate, so arm a
-                // watchdog that force-drops the connection if it has not shut
-                // down gracefully in time.
-                self.arm_disconnect_watchdog();
+            if let Some(response) = self.pending_certificate.borrow_mut().take() {
+                let _ = response.send(CertificateDecision::Reject);
+            }
+            let Some(session) = self.session.borrow().as_ref().cloned() else {
+                return;
+            };
+            if self.state.get() == RdpState::Connecting {
+                session.abort();
+            } else {
+                session.disconnect();
+                self.arm_disconnect_watchdog(session);
             }
         }
 
-        /// Schedules a forced disconnect if the graceful shutdown does not
-        /// complete within [`GRACEFUL_DISCONNECT_TIMEOUT`]. Cancelling the token
-        /// drops the client future (closing the socket) and reports a terminal
-        /// event back to the UI.
-        ///
-        /// The watchdog captures the current session's token by value so that a
-        /// watchdog left over from a previous session can never cancel a newer
-        /// connection's token.
-        fn arm_disconnect_watchdog(&self) {
+        fn arm_disconnect_watchdog(&self, session: Session) {
             self.clear_disconnect_watchdog();
-
-            let Some(token) = self.cancel_token.borrow().clone() else {
-                return;
-            };
-
             let source_id = glib::timeout_add_local_once(
                 GRACEFUL_DISCONNECT_TIMEOUT,
                 glib::clone!(
@@ -271,239 +201,222 @@ mod imp {
                     self,
                     move || {
                         *imp.disconnect_timeout.borrow_mut() = None;
-                        if !token.is_cancelled() {
+                        if imp.state.get() != RdpState::Disconnected {
                             warn!("Graceful disconnect timed out; forcing connection drop");
-                            token.cancel();
+                            session.abort();
                         }
                     }
                 ),
             );
-
             *self.disconnect_timeout.borrow_mut() = Some(source_id);
         }
 
-        /// Cancels a pending disconnect watchdog. Called once the session has
-        /// actually terminated so the watchdog cannot fire afterwards.
         fn clear_disconnect_watchdog(&self) {
             if let Some(source_id) = self.disconnect_timeout.borrow_mut().take() {
                 source_id.remove();
             }
         }
 
-        fn process_message(&self, output_event: RdpOutputEvent) {
-            match output_event {
-                RdpOutputEvent::ConnectionFailure(reason) => {
-                    self.obj().set_state(RdpState::Disconnected);
-                    let error_string = friendly_connection_error(&reason);
-                    self.obj()
-                        .emit_by_name::<()>("connection-failed", &[&error_string]);
-                }
-                RdpOutputEvent::Terminated(Ok(reason)) => {
-                    info!("Session terminated: {}", reason);
-                    self.clear_disconnect_watchdog();
-                    self.obj().set_state(RdpState::Disconnected);
-                }
-                RdpOutputEvent::Terminated(Err(e)) => {
-                    warn!("Session error: {}", e);
-                    self.clear_disconnect_watchdog();
-                    self.obj().set_state(RdpState::Disconnected);
-                }
-                RdpOutputEvent::Image { buffer, width, height } => {
+        fn process_event(&self, event: SessionEvent) {
+            match event {
+                SessionEvent::Frame {
+                    buffer,
+                    width,
+                    height,
+                    stride,
+                } => {
                     if self.state.get() == RdpState::Connecting {
                         info!("State connected (first frame received)");
                         self.obj().set_state(RdpState::Connected);
                     }
-                    *self.texture.borrow_mut() = Some(render::image_texture(buffer, width, height));
-                    self.obj().queue_draw();
+                    if let Some(texture) = render::image_texture(buffer, width, height, stride) {
+                        *self.texture.borrow_mut() = Some(texture);
+                        self.obj().queue_draw();
+                    }
                 }
-                RdpOutputEvent::PointerDefault => {
-                    let cursor = gdk::Cursor::from_name("default", None);
-                    self.obj().set_cursor(cursor.as_ref());
-                }
-                RdpOutputEvent::PointerHidden => {
-                    let cursor = gdk::Cursor::from_name("none", None);
-                    self.obj().set_cursor(cursor.as_ref());
-                }
-                RdpOutputEvent::PointerPosition { x, y } => {
-                    debug!("PointerPosition {} {}", x, y);
-                }
-                RdpOutputEvent::PointerBitmap(pointer) => {
-                    debug!(width = ?pointer.width, height = ?pointer.height, "Received pointer bitmap");
-                    if let Some(cursor) = render::pointer_cursor(&pointer, self.surface_scale()) {
+                SessionEvent::Cursor {
+                    data,
+                    width,
+                    height,
+                    hotspot_x,
+                    hotspot_y,
+                } => {
+                    if let Some(cursor) = render::pointer_cursor(
+                        data,
+                        width,
+                        height,
+                        hotspot_x,
+                        hotspot_y,
+                        self.connection_scale.get(),
+                    ) {
                         self.obj().set_cursor(Some(&cursor));
                     }
                 }
-            }
-        }
-
-        /// Translates a hardware keycode into an RDP scancode and sends the
-        /// matching key press or release to the remote host. Unknown keycodes
-        /// are ignored (with a warning logged by [`input::key_scancode`]).
-        pub fn send_key(&self, keycode: u16, pressed: bool) {
-            let Some(scancode) = input::key_scancode(keycode) else {
-                return;
-            };
-            let operation = if pressed {
-                Operation::KeyPressed(scancode)
-            } else {
-                Operation::KeyReleased(scancode)
-            };
-            self.send_input_operation(operation);
-        }
-
-        fn send_input_operation(&self, operation: Operation) {
-            let input_events = self
-                .input_database
-                .get()
-                .unwrap()
-                .borrow_mut()
-                .apply(core::iter::once(operation));
-            self.send_fast_path_events(input_events);
-        }
-
-        fn send_fast_path_events(
-            &self,
-            input_events: smallvec::SmallVec<
-                [ironrdp::pdu::input::fast_path::FastPathInputEvent; 2],
-            >,
-        ) {
-            if !input_events.is_empty() {
-                if let Some(sender) = self.input_sender.borrow().as_ref() {
-                    let _ = sender.send(RdpInputEvent::FastPath(input_events));
+                SessionEvent::CursorHidden => {
+                    self.obj()
+                        .set_cursor(gdk::Cursor::from_name("none", None).as_ref());
+                }
+                SessionEvent::CursorDefault => {
+                    self.obj()
+                        .set_cursor(gdk::Cursor::from_name("default", None).as_ref());
+                }
+                SessionEvent::CertificateRequest { details, response } => {
+                    self.present_certificate_dialog(details, response);
+                }
+                SessionEvent::ConnectionFailure(error) => {
+                    self.finish_session();
+                    let message = friendly_connection_error(&error);
+                    self.obj()
+                        .emit_by_name::<()>("connection-failed", &[&message]);
+                }
+                SessionEvent::Terminated(detail) => {
+                    if let Some(detail) = detail {
+                        warn!("RDP session terminated: {detail}");
+                    }
+                    self.finish_session();
                 }
             }
         }
 
-        fn setup_input_database(&self) {
-            assert!(
-                self.input_database
-                    .set(RefCell::new(ironrdp::input::Database::new()))
-                    .is_ok()
-            );
+        fn finish_session(&self) {
+            self.clear_disconnect_watchdog();
+            self.session.borrow_mut().take();
+            self.obj().set_state(RdpState::Disconnected);
         }
 
-        /// Sets up the channel that relays output events from the RDP worker
-        /// thread to `process_message` on the GTK main loop.
-        fn setup_output_relay(&self) {
-            let (relay_tx, relay_rx) = async_channel::bounded::<RdpOutputEvent>(64);
-            self.output_relay.set(relay_tx).unwrap();
+        fn present_certificate_dialog(
+            &self,
+            details: CertificateDetails,
+            response: mpsc::SyncSender<CertificateDecision>,
+        ) {
+            if let Some(previous) = self.pending_certificate.borrow_mut().replace(response) {
+                let _ = previous.send(CertificateDecision::Reject);
+            }
+
+            let heading = if details.changed() {
+                gettext("The server certificate has changed")
+            } else {
+                gettext("Untrusted server certificate")
+            };
+            let mut body = format!(
+                "{}: {}:{}\n{}: {}\n{}: {}\n{}: {}",
+                gettext("Server"),
+                details.host,
+                details.port,
+                gettext("Subject"),
+                details.subject,
+                gettext("Issuer"),
+                details.issuer,
+                gettext("Fingerprint"),
+                details.fingerprint
+            );
+            if !details.common_name.is_empty() {
+                body.push_str(&format!(
+                    "\n{}: {}",
+                    gettext("Common name"),
+                    details.common_name
+                ));
+            }
+            if details.host_mismatch {
+                body.push_str(&format!(
+                    "\n\n{}",
+                    gettext("The certificate name does not match this server.")
+                ));
+            }
+            if let Some(old) = details.old_fingerprint.as_deref() {
+                body.push_str(&format!(
+                    "\n{}: {}",
+                    gettext("Previous fingerprint"),
+                    old
+                ));
+            }
+            if let Some(old_subject) = details.old_subject.as_deref() {
+                body.push_str(&format!(
+                    "\n{}: {}",
+                    gettext("Previous subject"),
+                    old_subject
+                ));
+            }
+            if let Some(old_issuer) = details.old_issuer.as_deref() {
+                body.push_str(&format!(
+                    "\n{}: {}",
+                    gettext("Previous issuer"),
+                    old_issuer
+                ));
+            }
+
+            let dialog = adw::AlertDialog::new(Some(&heading), Some(&body));
+            dialog.add_response("cancel", &gettext("Cancel"));
+            dialog.add_response("once", &gettext("Trust Once"));
+            dialog.add_response("always", &gettext("Trust and Remember"));
+            dialog.set_response_appearance("always", adw::ResponseAppearance::Suggested);
+            dialog.set_default_response(Some("cancel"));
+            dialog.set_close_response("cancel");
+            let parent = self.obj().root().and_downcast::<gtk::Window>();
 
             glib::spawn_future_local(glib::clone!(
-                #[weak(rename_to=imp)]
+                #[weak(rename_to = imp)]
                 self,
                 async move {
-                    while let Ok(event) = relay_rx.recv().await {
-                        imp.process_message(event);
+                    let choice = dialog.choose_future(parent.as_ref()).await;
+                    let decision = match choice.as_str() {
+                        "once" => CertificateDecision::TrustOnce,
+                        "always" => CertificateDecision::TrustPermanently,
+                        _ => CertificateDecision::Reject,
+                    };
+                    if let Some(response) = imp.pending_certificate.borrow_mut().take() {
+                        let _ = response.send(decision);
                     }
                 }
             ));
         }
 
-        /// Sets up bidirectional clipboard sharing: a task that writes
-        /// remote-originated text to the local clipboard, and a monitor that
-        /// forwards local clipboard changes to the remote.
-        fn setup_clipboard(&self) {
-            let context = clip::new_shared_context();
-            self.clipboard_context.set(context.clone()).ok();
-
-            let (clip_tx, clip_rx) = async_channel::bounded::<String>(16);
-            self.gtk_clipboard_tx.set(clip_tx).ok();
-
-            // GTK task: receive text from remote and write it to the local clipboard.
-            glib::spawn_future_local(async move {
-                while let Ok(text) = clip_rx.recv().await {
-                    if let Some(display) = gdk::Display::default() {
-                        display.clipboard().set_text(&text);
-                    }
-                }
-            });
-
-            // Monitor local clipboard changes and forward to the remote.
-            if let Some(display) = gdk::Display::default() {
-                let context_for_clipboard = context.clone();
-                display.clipboard().connect_changed(move |cb| {
-                    let cb = cb.clone();
-                    let ctx = context_for_clipboard.clone();
-                    glib::spawn_future_local(async move {
-                        match cb.read_text_future().await {
-                            Ok(Some(text)) => {
-                                let should_skip = {
-                                    let mut c = ctx.lock().unwrap();
-                                    if c.last_remote_text.as_deref() == Some(text.as_str()) {
-                                        c.last_remote_text = None;
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                };
-                                if should_skip {
-                                    return;
-                                }
-                                let utf16: Vec<u8> = text
-                                    .encode_utf16()
-                                    .flat_map(|c| c.to_le_bytes())
-                                    .chain([0u8, 0u8])
-                                    .collect();
-                                let proxy = {
-                                    let mut c = ctx.lock().unwrap();
-                                    c.local_text_utf16 = Some(utf16);
-                                    c.proxy.clone()
-                                };
-                                if let Some(proxy) = proxy {
-                                    proxy.send_clipboard_message(
-                                        ClipboardMessage::SendInitiateCopy(vec![
-                                            ClipboardFormat::new(ClipboardFormatId::CF_UNICODETEXT),
-                                        ]),
-                                    );
-                                }
-                            }
-                            Ok(None) => {
-                                ctx.lock().unwrap().local_text_utf16 = None;
-                            }
-                            Err(e) => {
-                                debug!("Failed to read clipboard text: {e}");
-                            }
-                        }
-                    });
-                });
+        pub fn send_key(&self, keycode: u16, pressed: bool) {
+            if self.state.get() != RdpState::Connected {
+                return;
+            }
+            if let (Some(scancode), Some(session)) = (
+                input::key_scancode(keycode),
+                self.session.borrow().as_ref(),
+            ) {
+                session.send_key(scancode, pressed);
             }
         }
 
-        /// Sets up the motion controller: forwards pointer motion to the remote
-        /// and grabs focus / inhibits system shortcuts while the pointer is over
-        /// the connected session.
+        fn send_mouse(&self, flags: u16, x: f64, y: f64) {
+            if self.state.get() != RdpState::Connected {
+                return;
+            }
+            let scale = self.surface_scale();
+            let x = (x * scale).round().clamp(0.0, u16::MAX as f64) as u16;
+            let y = (y * scale).round().clamp(0.0, u16::MAX as f64) as u16;
+            self.pointer_x.set(x);
+            self.pointer_y.set(y);
+            if let Some(session) = self.session.borrow().as_ref() {
+                session.send_mouse(flags, x, y);
+            }
+        }
+
         fn setup_motion_controller(&self) {
-            let event_controller_motion = gtk::EventControllerMotion::new();
-            event_controller_motion.connect_motion(glib::clone!(
-                #[weak(rename_to=imp)]
+            let controller = gtk::EventControllerMotion::new();
+            controller.connect_motion(glib::clone!(
+                #[weak(rename_to = imp)]
                 self,
-                move |_controller, x, y| {
-                    if imp.state.get() != RdpState::Connected {
-                        return;
-                    }
-                    let scale = imp.surface_scale();
-                    let operation =
-                        Operation::MouseMove(ironrdp::input::MousePosition {
-                            x: (x * scale) as u16,
-                            y: (y * scale) as u16,
-                        });
-                    imp.send_input_operation(operation);
-                }
+                move |_controller, x, y| imp.send_mouse(input::PTR_FLAGS_MOVE, x, y)
             ));
-            event_controller_motion.connect_enter(glib::clone!(
-                #[weak(rename_to=imp)]
+            controller.connect_enter(glib::clone!(
+                #[weak(rename_to = imp)]
                 self,
                 move |_controller, _x, _y| {
-                    if imp.state.get() != RdpState::Connected {
-                        return;
+                    if imp.state.get() == RdpState::Connected {
+                        let obj = imp.obj();
+                        obj.grab_focus();
+                        crate::utils::set_shortcuts_inhibited(&*obj, true);
                     }
-                    let obj = imp.obj();
-                    obj.grab_focus();
-                    crate::utils::set_shortcuts_inhibited(&*obj, true);
                 }
             ));
-            event_controller_motion.connect_leave(glib::clone!(
-                #[weak(rename_to=imp)]
+            controller.connect_leave(glib::clone!(
+                #[weak(rename_to = imp)]
                 self,
                 move |_controller| {
                     let obj = imp.obj();
@@ -513,72 +426,61 @@ mod imp {
                     }
                 }
             ));
-            self.obj().add_controller(event_controller_motion);
+            self.obj().add_controller(controller);
         }
 
-        /// Sets up the event controllers translating mouse button and scroll
-        /// events into RDP input operations. Key events are routed separately
-        /// through [`IronRdpWidget::send_key`] from a capture-phase controller
-        /// on the toplevel window, so they can preempt GTK's own keyboard
-        /// bindings (accelerators, mnemonics, the F10 primary menu).
         fn setup_input_controller(&self) {
-            // `GestureClick` listens to button 1 only by default; button 0
-            // makes it report every button so the right/middle buttons that
-            // `input::mouse_button` maps reach us too.
-            let gesture_click = gtk::GestureClick::new();
-            gesture_click.set_button(0);
-            gesture_click.connect_pressed(glib::clone!(
-                #[weak(rename_to=imp)]
+            let click = gtk::GestureClick::new();
+            click.set_button(0);
+            click.connect_pressed(glib::clone!(
+                #[weak(rename_to = imp)]
                 self,
-                move |gesture, _n_press, _x, _y| {
-                    let Some(mouse_button) = input::mouse_button(gesture.current_button())
-                    else {
-                        return;
-                    };
-                    imp.send_input_operation(Operation::MouseButtonPressed(mouse_button));
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                move |gesture, _count, x, y| {
+                    if let Some(button) = input::mouse_button(gesture.current_button()) {
+                        imp.send_mouse(button | input::PTR_FLAGS_DOWN, x, y);
+                        gesture.set_state(gtk::EventSequenceState::Claimed);
+                    }
                 }
             ));
-            gesture_click.connect_released(glib::clone!(
-                #[weak(rename_to=imp)]
+            click.connect_released(glib::clone!(
+                #[weak(rename_to = imp)]
                 self,
-                move |gesture, _n_press, _x, _y| {
-                    let Some(mouse_button) = input::mouse_button(gesture.current_button())
-                    else {
-                        return;
-                    };
-                    imp.send_input_operation(Operation::MouseButtonReleased(mouse_button));
-                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                move |gesture, _count, x, y| {
+                    if let Some(button) = input::mouse_button(gesture.current_button()) {
+                        imp.send_mouse(button, x, y);
+                        gesture.set_state(gtk::EventSequenceState::Claimed);
+                    }
                 }
             ));
-            self.obj().add_controller(gesture_click);
+            self.obj().add_controller(click);
 
-            let scroll_controller =
+            let scroll =
                 gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
-            scroll_controller.connect_scroll(glib::clone!(
-                #[weak(rename_to=imp)]
+            scroll.connect_scroll(glib::clone!(
+                #[weak(rename_to = imp)]
                 self,
                 #[upgrade_or]
                 glib::Propagation::Proceed,
-                move |controller, dx, dy| -> glib::Propagation {
-                    for operation in input::scroll_operations(dx, dy, controller.unit()) {
-                        imp.send_input_operation(operation);
+                move |controller, dx, dy| {
+                    if imp.state.get() != RdpState::Connected {
+                        return glib::Propagation::Proceed;
+                    }
+                    if let Some(session) = imp.session.borrow().as_ref() {
+                        for flags in input::scroll_flags(dx, dy, controller.unit()) {
+                            session.send_mouse(flags, imp.pointer_x.get(), imp.pointer_y.get());
+                        }
                     }
                     glib::Propagation::Stop
                 }
             ));
-            self.obj().add_controller(scroll_controller);
+            self.obj().add_controller(scroll);
         }
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for IronRdpWidget {
+    impl ObjectImpl for RdpWidget {
         fn constructed(&self) {
             self.parent_constructed();
-
-            self.setup_input_database();
-            self.setup_output_relay();
-            self.setup_clipboard();
             self.setup_motion_controller();
             self.setup_input_controller();
             self.obj().set_focusable(true);
@@ -594,20 +496,21 @@ mod imp {
                 ]
             })
         }
+
+        fn dispose(&self) {
+            self.disconnect();
+        }
     }
 
-    impl WidgetImpl for IronRdpWidget {
+    impl WidgetImpl for RdpWidget {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
-
             if self.state.get() != RdpState::Connected {
                 return;
             }
-
             if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
                 source_id.remove();
             }
-
             let source_id = glib::timeout_add_local_once(
                 std::time::Duration::from_millis(500),
                 glib::clone!(
@@ -615,53 +518,47 @@ mod imp {
                     self,
                     move || {
                         *imp.resize_timeout.borrow_mut() = None;
-                        let Some((phys_width, phys_height, scale_factor)) =
-                            imp.physical_size(width as f64, height as f64)
+                        let Some((width, height, scale)) =
+                            imp.physical_size(width.into(), height.into())
                         else {
                             return;
                         };
-                        if let Some(sender) = imp.input_sender.borrow().as_ref() {
-                            let _ = sender.send(RdpInputEvent::Resize {
-                                width: phys_width,
-                                height: phys_height,
-                                scale_factor,
-                                physical_size: None,
-                            });
+                        imp.connection_scale.set(imp.surface_scale());
+                        if let Some(session) = imp.session.borrow().as_ref() {
+                            session.resize(width.into(), height.into(), scale);
                         }
                     }
                 ),
             );
-
             *self.resize_timeout.borrow_mut() = Some(source_id);
         }
 
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
-            let w = self.obj().width() as f32;
-            let h = self.obj().height() as f32;
+            let width = self.obj().width() as f32;
+            let height = self.obj().height() as f32;
             if let Some(texture) = self.texture.borrow().as_ref() {
                 snapshot.append_texture(
                     texture,
-                    &gtk::graphene::Rect::new(0.0, 0.0, w, h),
+                    &gtk::graphene::Rect::new(0.0, 0.0, width, height),
                 );
             } else {
                 snapshot.append_color(
                     &gdk::RGBA::BLACK,
-                    &gtk::graphene::Rect::new(0.0, 0.0, w, h),
+                    &gtk::graphene::Rect::new(0.0, 0.0, width, height),
                 );
             }
-
-            self.parent_snapshot(snapshot)
+            self.parent_snapshot(snapshot);
         }
     }
 }
 
 glib::wrapper! {
-    pub struct IronRdpWidget(ObjectSubclass<imp::IronRdpWidget>)
+    pub struct RdpWidget(ObjectSubclass<imp::RdpWidget>)
         @extends gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
-impl IronRdpWidget {
+impl RdpWidget {
     pub fn connect_to_server(
         &self,
         hostname: String,
@@ -679,8 +576,6 @@ impl IronRdpWidget {
         self.imp().disconnect();
     }
 
-    /// Forwards a key press (`pressed = true`) or release to the remote host,
-    /// translating the GDK hardware `keycode` into an RDP scancode.
     pub fn send_key(&self, keycode: u16, pressed: bool) {
         self.imp().send_key(keycode, pressed);
     }

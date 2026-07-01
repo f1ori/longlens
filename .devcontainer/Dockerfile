@@ -17,6 +17,7 @@ RUN microdnf install -y --refresh \
     cmake \
     sudo \
     git-lfs \
+    freerdp-devel \
     && microdnf clean all \
     && useradd -m -u 1000 vscode \
     && echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/vscode

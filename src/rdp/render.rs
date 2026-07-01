@@ -18,89 +18,56 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-//! Conversion of IronRDP framebuffer and pointer data into GDK textures/cursors.
-
-use core::num::NonZeroU16;
+//! Conversion of FreeRDP framebuffer and pointer data into GDK objects.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ironrdp::graphics::pointer::DecodedPointer;
-use tracing::warn;
 
-/// Wraps the framebuffer so it can be handed to `glib::Bytes::from_owned`
-/// without copying. ironrdp encodes pixels as `0x00RRGGBB`, which on
-/// little-endian is `[B, G, R, 0x00]` in memory — exactly `B8g8r8x8` — so the
-/// `u32` slice can be reinterpreted as bytes directly.
-pub struct PixelBytes(pub Vec<u32>);
-
-impl AsRef<[u8]> for PixelBytes {
-    fn as_ref(&self) -> &[u8] {
-        // SAFETY: the slice is valid for `len * 4` bytes, `u32` is suitably
-        // aligned for `u8`, and every byte pattern is a valid `u8`.
-        unsafe {
-            std::slice::from_raw_parts(
-                self.0.as_ptr() as *const u8,
-                std::mem::size_of_val(self.0.as_slice()),
-            )
-        }
-    }
-}
-
-/// Builds a GDK texture from an IronRDP framebuffer. The framebuffer layout
-/// already matches `B8g8r8x8`, so it is reinterpreted as bytes without copying
-/// (see [`PixelBytes`]).
-pub fn image_texture(buffer: Vec<u32>, width: NonZeroU16, height: NonZeroU16) -> gdk::MemoryTexture {
-    let bytes = glib::Bytes::from_owned(PixelBytes(buffer));
-    gdk::MemoryTexture::new(
-        width.get().into(),
-        height.get().into(),
+pub fn image_texture(
+    buffer: Vec<u8>,
+    width: u32,
+    height: u32,
+    stride: u32,
+) -> Option<gdk::MemoryTexture> {
+    let width = i32::try_from(width).ok()?;
+    let height = i32::try_from(height).ok()?;
+    let bytes = glib::Bytes::from_owned(buffer);
+    Some(gdk::MemoryTexture::new(
+        width,
+        height,
         gdk::MemoryFormat::B8g8r8x8,
         &bytes,
-        (width.get() as usize) * 4,
-    )
+        stride as usize,
+    ))
 }
 
-/// Builds a GDK cursor from an IronRDP pointer bitmap, or `None` if the cursor
-/// could not be created. `connection_scale` is the display scale that was
-/// active when the connection was started or last resized — the RDP server
-/// rendered the pointer bitmap at that scale, so we use it to convert from
-/// physical to logical pixels. A warning is logged when GTK's callback-provided
-/// scale differs, as the cursor will then be mis-sized or blurry.
-pub fn pointer_cursor(pointer: &DecodedPointer, connection_scale: f64) -> Option<gdk::Cursor> {
-    let tex_w = pointer.width as i32;
-    let tex_h = pointer.height as i32;
-    let hotspot_x = pointer.hotspot_x as i32;
-    let hotspot_y = pointer.hotspot_y as i32;
-    let bitmap_bytes = glib::Bytes::from_owned(pointer.bitmap_data.clone());
+pub fn pointer_cursor(
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+    hotspot_x: u32,
+    hotspot_y: u32,
+    connection_scale: f64,
+) -> Option<gdk::Cursor> {
+    let tex_w = i32::try_from(width).ok()?;
+    let tex_h = i32::try_from(height).ok()?;
+    let bytes = glib::Bytes::from_owned(data);
     let texture = gdk::MemoryTexture::new(
         tex_w,
         tex_h,
         gdk::MemoryFormat::R8g8b8a8,
-        &bitmap_bytes,
-        (tex_w as usize) * 4,
+        &bytes,
+        width as usize * 4,
     );
     gdk::Cursor::from_callback(
-        move |_cursor, _cursor_size, scale, width, height, hx, hy| {
-            if (scale - connection_scale).abs() > f64::EPSILON {
-                warn!(
-                    connection_scale,
-                    callback_scale = scale,
-                    "cursor scale mismatch: pointer bitmap was rendered at connection scale \
-                     but GTK requests a different scale; cursor may appear blurry or mis-sized"
-                );
-            }
-            *width = (tex_w as f64 / connection_scale).round() as i32;
-            *height = (tex_h as f64 / connection_scale).round() as i32;
+        move |_cursor, _cursor_size, _scale, out_width, out_height, hx, hy| {
+            *out_width = (width as f64 / connection_scale).round() as i32;
+            *out_height = (height as f64 / connection_scale).round() as i32;
             *hx = (hotspot_x as f64 / connection_scale).round() as i32;
             *hy = (hotspot_y as f64 / connection_scale).round() as i32;
-            let t = texture.clone().upcast::<gdk::Texture>();
-            // The gtk4-rs binding uses to_glib_none (no ref bump) but
-            // GdkCursorGetTextureCallback has transfer:full semantics —
-            // GTK calls g_object_unref on the returned pointer. Leaking
-            // one clone here provides the extra ref GTK will consume,
-            // keeping the closure's own reference intact.
-            std::mem::forget(t.clone());
-            t
+            let texture = texture.clone().upcast::<gdk::Texture>();
+            std::mem::forget(texture.clone());
+            texture
         },
         None,
     )

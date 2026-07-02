@@ -97,6 +97,8 @@ pub enum SessionEvent {
     },
     CursorHidden,
     CursorDefault,
+    ClipboardText(String),
+    ClipboardRemoteTextAvailable,
     CertificateRequest {
         details: CertificateDetails,
         response: mpsc::SyncSender<CertificateDecision>,
@@ -129,6 +131,8 @@ enum SessionCommand {
         height: u32,
         desktop_scale: u32,
     },
+    ClipboardSetText(String),
+    ClipboardRequestText,
     Disconnect,
 }
 
@@ -195,6 +199,8 @@ impl Session {
             frame: Some(frame_callback),
             cursor: Some(cursor_callback),
             cursor_system: Some(cursor_system_callback),
+            clipboard_offer_text: Some(clipboard_offer_text_callback),
+            clipboard_text: Some(clipboard_text_callback),
             verify_certificate: Some(certificate_callback),
         };
         let native_config = ffi::LLSessionConfig {
@@ -241,6 +247,14 @@ impl Session {
         });
     }
 
+    pub fn set_clipboard_text(&self, text: String) {
+        let _ = self.commands.send(SessionCommand::ClipboardSetText(text));
+    }
+
+    pub fn request_clipboard_text(&self) {
+        let _ = self.commands.send(SessionCommand::ClipboardRequestText);
+    }
+
     pub fn disconnect(&self) {
         let _ = self.commands.send(SessionCommand::Disconnect);
     }
@@ -282,6 +296,19 @@ fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionComman
                         height,
                         desktop_scale,
                     );
+                },
+                SessionCommand::ClipboardSetText(text) => {
+                    let data = encode_clipboard_text(&text);
+                    unsafe {
+                        ffi::ll_session_clipboard_set_text(
+                            native.raw.as_ptr(),
+                            data.as_ptr(),
+                            data.len() as u32,
+                        );
+                    }
+                }
+                SessionCommand::ClipboardRequestText => unsafe {
+                    ffi::ll_session_clipboard_request_text(native.raw.as_ptr());
                 },
                 SessionCommand::Disconnect => {
                     unsafe { ffi::ll_session_disconnect(native.raw.as_ptr()) };
@@ -368,6 +395,47 @@ unsafe extern "C" fn cursor_system_callback(user_data: *mut c_void, kind: u32) {
         SessionEvent::CursorDefault
     };
     let _ = context.output.send_blocking(event);
+}
+
+unsafe extern "C" fn clipboard_offer_text_callback(user_data: *mut c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+    let _ = context
+        .output
+        .send_blocking(SessionEvent::ClipboardRemoteTextAvailable);
+}
+
+unsafe extern "C" fn clipboard_text_callback(user_data: *mut c_void, data: *const u8, size: u32) {
+    if user_data.is_null() || data.is_null() {
+        return;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(data, size as usize) };
+    if let Some(text) = decode_clipboard_text(bytes) {
+        let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+        let _ = context.output.send_blocking(SessionEvent::ClipboardText(text));
+    }
+}
+
+fn encode_clipboard_text(text: &str) -> Vec<u8> {
+    let mut data = Vec::with_capacity((text.len() + 1) * 2);
+    for unit in text.encode_utf16().chain(std::iter::once(0)) {
+        data.extend_from_slice(&unit.to_le_bytes());
+    }
+    data
+}
+
+fn decode_clipboard_text(data: &[u8]) -> Option<String> {
+    let mut units = Vec::with_capacity(data.len() / 2);
+    for chunk in data.chunks_exact(2) {
+        let unit = u16::from_le_bytes([chunk[0], chunk[1]]);
+        if unit == 0 {
+            break;
+        }
+        units.push(unit);
+    }
+    String::from_utf16(&units).ok()
 }
 
 unsafe extern "C" fn certificate_callback(

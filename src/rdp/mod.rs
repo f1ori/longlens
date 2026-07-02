@@ -84,6 +84,7 @@ mod imp {
         resize_timeout: RefCell<Option<glib::SourceId>>,
         disconnect_timeout: RefCell<Option<glib::SourceId>>,
         pending_certificate: RefCell<Option<mpsc::SyncSender<CertificateDecision>>>,
+        last_remote_clipboard: RefCell<Option<String>>,
         generation: Cell<u64>,
         pointer_x: Cell<u16>,
         pointer_y: Cell<u16>,
@@ -228,6 +229,7 @@ mod imp {
                     if self.state.get() == RdpState::Connecting {
                         info!("State connected (first frame received)");
                         self.obj().set_state(RdpState::Connected);
+                        self.announce_local_clipboard();
                     }
                     if let Some(texture) = render::image_texture(buffer, width, height, stride) {
                         *self.texture.borrow_mut() = Some(texture);
@@ -259,6 +261,15 @@ mod imp {
                 SessionEvent::CursorDefault => {
                     self.obj()
                         .set_cursor(gdk::Cursor::from_name("default", None).as_ref());
+                }
+                SessionEvent::ClipboardRemoteTextAvailable => {
+                    if let Some(session) = self.session.borrow().as_ref() {
+                        session.request_clipboard_text();
+                    }
+                }
+                SessionEvent::ClipboardText(text) => {
+                    *self.last_remote_clipboard.borrow_mut() = Some(text.clone());
+                    self.obj().display().clipboard().set_text(&text);
                 }
                 SessionEvent::CertificateRequest { details, response } => {
                     self.present_certificate_dialog(details, response);
@@ -411,6 +422,7 @@ mod imp {
                     if imp.state.get() == RdpState::Connected {
                         let obj = imp.obj();
                         obj.grab_focus();
+                        imp.announce_local_clipboard();
                         crate::utils::set_shortcuts_inhibited(&*obj, true);
                     }
                 }
@@ -427,6 +439,42 @@ mod imp {
                 }
             ));
             self.obj().add_controller(controller);
+        }
+
+        fn announce_local_clipboard(&self) {
+            if self.state.get() != RdpState::Connected {
+                return;
+            }
+            let clipboard = self.obj().display().clipboard();
+            glib::spawn_future_local(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                async move {
+                    let text = match clipboard.read_text_future().await {
+                        Ok(Some(text)) => text.to_string(),
+                        Ok(None) => return,
+                        Err(error) => {
+                            warn!("Could not read local clipboard text: {error}");
+                            return;
+                        }
+                    };
+                    if imp.last_remote_clipboard.borrow().as_deref() == Some(text.as_str()) {
+                        imp.last_remote_clipboard.borrow_mut().take();
+                        return;
+                    }
+                    if let Some(session) = imp.session.borrow().as_ref() {
+                        session.set_clipboard_text(text);
+                    }
+                }
+            ));
+        }
+
+        fn setup_clipboard(&self) {
+            self.obj().display().clipboard().connect_changed(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                move |_clipboard| imp.announce_local_clipboard()
+            ));
         }
 
         fn setup_input_controller(&self) {
@@ -483,6 +531,7 @@ mod imp {
             self.parent_constructed();
             self.setup_motion_controller();
             self.setup_input_controller();
+            self.setup_clipboard();
             self.obj().set_focusable(true);
         }
 

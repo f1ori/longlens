@@ -20,6 +20,7 @@ A simple, minimal, and modern RDP client
 * GNOME Search Provider for destinations (can be enabled in GNOME Settings)
 * High-DPI display support
 * Fullscreen mode
+* Text clipboard sync between local and remote sessions
 
 ## How to install
 

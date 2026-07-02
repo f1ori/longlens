@@ -44,6 +44,8 @@ pub struct LLSessionCallbacks {
     pub frame: Option<unsafe extern "C" fn(*mut c_void, *const u8, u32, u32, u32)>,
     pub cursor: Option<unsafe extern "C" fn(*mut c_void, *const u8, u32, u32, u32, u32)>,
     pub cursor_system: Option<unsafe extern "C" fn(*mut c_void, u32)>,
+    pub clipboard_offer_text: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub clipboard_text: Option<unsafe extern "C" fn(*mut c_void, *const u8, u32)>,
     pub verify_certificate: Option<
         unsafe extern "C" fn(
             *mut c_void,
@@ -97,6 +99,12 @@ unsafe extern "C" {
         height: u32,
         desktop_scale: u32,
     ) -> i32;
+    pub fn ll_session_clipboard_set_text(
+        session: *mut LLSession,
+        data: *const u8,
+        size: u32,
+    ) -> i32;
+    pub fn ll_session_clipboard_request_text(session: *mut LLSession) -> i32;
 
     pub fn ll_rdp_file_parse(path: *const c_char, result: *mut LLRdpFile) -> i32;
     pub fn ll_rdp_file_clear(result: *mut LLRdpFile);
@@ -129,6 +137,8 @@ mod tests {
             frame: None,
             cursor: None,
             cursor_system: None,
+            clipboard_offer_text: None,
+            clipboard_text: None,
             verify_certificate: None,
         };
         let session = unsafe { ll_session_new(&config, &callbacks) };

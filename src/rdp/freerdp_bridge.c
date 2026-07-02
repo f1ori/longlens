@@ -28,9 +28,11 @@
 #include <freerdp/addin.h>
 #include <freerdp/client.h>
 #include <freerdp/client/channels.h>
+#include <freerdp/client/cliprdr.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/client/disp.h>
 #include <freerdp/client/file.h>
+#include <freerdp/channels/cliprdr.h>
 #include <freerdp/channels/rdpgfx.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/constants.h>
@@ -43,12 +45,14 @@
 #include <freerdp/channels/disp.h>
 #include <winpr/crt.h>
 #include <winpr/synch.h>
+#include <winpr/user.h>
 
 typedef struct {
     rdpClientContext common;
     LLSession* session;
     DispClientContext* disp;
     RdpgfxClientContext* gfx;
+    CliprdrClientContext* cliprdr;
 } LLContext;
 
 typedef struct {
@@ -60,6 +64,8 @@ struct LLSession {
     rdpContext* context;
     LLSessionCallbacks callbacks;
     uint32_t last_error;
+    uint8_t* clipboard_text;
+    uint32_t clipboard_text_size;
 };
 
 static LLContext* ll_context(rdpContext* context)
@@ -174,6 +180,109 @@ static BOOL ll_pointer_position(rdpContext* context, uint32_t x, uint32_t y)
     return TRUE;
 }
 
+static UINT ll_cliprdr_send_format_list_response(CliprdrClientContext* cliprdr, UINT16 flags)
+{
+    if (!cliprdr || !cliprdr->ClientFormatListResponse)
+        return ERROR_INTERNAL_ERROR;
+    CLIPRDR_FORMAT_LIST_RESPONSE response = { 0 };
+    response.common.msgType = CB_FORMAT_LIST_RESPONSE;
+    response.common.msgFlags = flags;
+    return cliprdr->ClientFormatListResponse(cliprdr, &response);
+}
+
+static UINT ll_cliprdr_server_capabilities(CliprdrClientContext* cliprdr,
+                                           const CLIPRDR_CAPABILITIES* capabilities)
+{
+    if (!cliprdr || !cliprdr->ClientCapabilities || !capabilities ||
+        capabilities->cCapabilitiesSets < 1 || !capabilities->capabilitySets)
+        return ERROR_INTERNAL_ERROR;
+
+    const CLIPRDR_GENERAL_CAPABILITY_SET* server =
+        (const CLIPRDR_GENERAL_CAPABILITY_SET*)capabilities->capabilitySets;
+    CLIPRDR_GENERAL_CAPABILITY_SET general = *server;
+    /* Some servers send an invalid two-byte long-format list for an empty
+     * clipboard. FreeRDP treats that as fatal. Do not negotiate long format
+     * names; the short-format parser tolerates this empty-list variant. */
+    general.generalFlags &= ~CB_USE_LONG_FORMAT_NAMES;
+
+    CLIPRDR_CAPABILITIES client = { 0 };
+    client.common.msgType = CB_CLIP_CAPS;
+    client.cCapabilitiesSets = 1;
+    client.capabilitySets = (CLIPRDR_CAPABILITY_SET*)&general;
+    return cliprdr->ClientCapabilities(cliprdr, &client);
+}
+
+static UINT ll_cliprdr_monitor_ready(CliprdrClientContext* cliprdr,
+                                     const CLIPRDR_MONITOR_READY* monitorReady)
+{
+    (void)monitorReady;
+    if (!cliprdr || !cliprdr->rdpcontext)
+        return ERROR_INTERNAL_ERROR;
+    LLSession* session = ll_from_context(cliprdr->rdpcontext);
+    if (session && session->clipboard_text && session->clipboard_text_size > 0)
+        return ll_session_clipboard_set_text(session, session->clipboard_text,
+                                             session->clipboard_text_size) ? CHANNEL_RC_OK
+                                                                          : ERROR_INTERNAL_ERROR;
+    return CHANNEL_RC_OK;
+}
+
+static UINT ll_cliprdr_server_format_list(CliprdrClientContext* cliprdr,
+                                          const CLIPRDR_FORMAT_LIST* formatList)
+{
+    if (!cliprdr || !cliprdr->rdpcontext || !formatList)
+        return ERROR_INTERNAL_ERROR;
+    BOOL has_text = FALSE;
+    for (UINT32 i = 0; i < formatList->numFormats; i++) {
+        const UINT32 format = formatList->formats[i].formatId;
+        if (format == CF_UNICODETEXT) {
+            has_text = TRUE;
+            break;
+        }
+    }
+    UINT status = ll_cliprdr_send_format_list_response(cliprdr, CB_RESPONSE_OK);
+    if (has_text) {
+        LLSession* session = ll_from_context(cliprdr->rdpcontext);
+        if (session && session->callbacks.clipboard_offer_text)
+            session->callbacks.clipboard_offer_text(session->callbacks.user_data);
+    }
+    return status;
+}
+
+static UINT ll_cliprdr_server_format_data_request(
+    CliprdrClientContext* cliprdr, const CLIPRDR_FORMAT_DATA_REQUEST* request)
+{
+    if (!cliprdr || !cliprdr->rdpcontext || !cliprdr->ClientFormatDataResponse || !request)
+        return ERROR_INTERNAL_ERROR;
+
+    LLSession* session = ll_from_context(cliprdr->rdpcontext);
+    CLIPRDR_FORMAT_DATA_RESPONSE response = { 0 };
+    response.common.msgType = CB_FORMAT_DATA_RESPONSE;
+    if (session && request->requestedFormatId == CF_UNICODETEXT && session->clipboard_text) {
+        response.common.msgFlags = CB_RESPONSE_OK;
+        response.common.dataLen = session->clipboard_text_size;
+        response.requestedFormatData = session->clipboard_text;
+    } else {
+        response.common.msgFlags = CB_RESPONSE_FAIL;
+    }
+    return cliprdr->ClientFormatDataResponse(cliprdr, &response);
+}
+
+static UINT ll_cliprdr_server_format_data_response(
+    CliprdrClientContext* cliprdr, const CLIPRDR_FORMAT_DATA_RESPONSE* response)
+{
+    if (!cliprdr || !cliprdr->rdpcontext || !response)
+        return ERROR_INTERNAL_ERROR;
+    LLSession* session = ll_from_context(cliprdr->rdpcontext);
+    if (session && session->callbacks.clipboard_text &&
+        (response->common.msgFlags & CB_RESPONSE_OK) && response->requestedFormatData &&
+        response->common.dataLen > 0) {
+        session->callbacks.clipboard_text(session->callbacks.user_data,
+                                          response->requestedFormatData,
+                                          response->common.dataLen);
+    }
+    return CHANNEL_RC_OK;
+}
+
 static void ll_channel_connected(void* data, const ChannelConnectedEventArgs* event)
 {
     LLContext* context = data;
@@ -181,6 +290,15 @@ static void ll_channel_connected(void* data, const ChannelConnectedEventArgs* ev
         return;
     if (strcmp(event->name, DISP_DVC_CHANNEL_NAME) == 0) {
         context->disp = (DispClientContext*)event->pInterface;
+    } else if (strcmp(event->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
+        context->cliprdr = (CliprdrClientContext*)event->pInterface;
+        if (context->cliprdr) {
+            context->cliprdr->ServerCapabilities = ll_cliprdr_server_capabilities;
+            context->cliprdr->MonitorReady = ll_cliprdr_monitor_ready;
+            context->cliprdr->ServerFormatList = ll_cliprdr_server_format_list;
+            context->cliprdr->ServerFormatDataRequest = ll_cliprdr_server_format_data_request;
+            context->cliprdr->ServerFormatDataResponse = ll_cliprdr_server_format_data_response;
+        }
     } else if (strcmp(event->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
         context->gfx = (RdpgfxClientContext*)event->pInterface;
         if (context->common.context.gdi)
@@ -197,6 +315,8 @@ static void ll_channel_disconnected(void* data, const ChannelDisconnectedEventAr
         return;
     if (strcmp(event->name, DISP_DVC_CHANNEL_NAME) == 0) {
         context->disp = NULL;
+    } else if (strcmp(event->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
+        context->cliprdr = NULL;
     } else if (strcmp(event->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
         if (context->common.context.gdi && context->gfx)
             gdi_graphics_pipeline_uninit(context->common.context.gdi, context->gfx);
@@ -357,7 +477,7 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
                                     config->desktop_scale) &&
         freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, 100) &&
         freerdp_settings_set_bool(settings, FreeRDP_AutoLogonEnabled, TRUE) &&
-        freerdp_settings_set_bool(settings, FreeRDP_RedirectClipboard, FALSE) &&
+        freerdp_settings_set_bool(settings, FreeRDP_RedirectClipboard, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_AudioPlayback, FALSE) &&
         freerdp_settings_set_bool(settings, FreeRDP_NetworkAutoDetect, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, TRUE) &&
@@ -383,6 +503,7 @@ void ll_session_free(LLSession* session)
         return;
     if (session->context)
         freerdp_client_context_free(session->context);
+    free(session->clipboard_text);
     free(session);
 }
 
@@ -493,6 +614,51 @@ int ll_session_resize(LLSession* session, uint32_t width, uint32_t height,
     layout.DesktopScaleFactor = desktop_scale;
     layout.DeviceScaleFactor = 100;
     return context->disp->SendMonitorLayout(context->disp, 1, &layout) == CHANNEL_RC_OK;
+}
+
+int ll_session_clipboard_set_text(LLSession* session, const uint8_t* data, uint32_t size)
+{
+    if (!session)
+        return 0;
+
+    uint8_t* copy = NULL;
+    if (data && size > 0) {
+        copy = malloc(size);
+        if (!copy)
+            return 0;
+        memcpy(copy, data, size);
+    }
+    free(session->clipboard_text);
+    session->clipboard_text = copy;
+    session->clipboard_text_size = copy ? size : 0;
+
+    if (!session->context)
+        return 0;
+    LLContext* context = ll_context(session->context);
+    if (!context->cliprdr || !context->cliprdr->ClientFormatList)
+        return 0;
+
+    CLIPRDR_FORMAT format = { 0 };
+    format.formatId = CF_UNICODETEXT;
+    CLIPRDR_FORMAT_LIST list = { 0 };
+    list.common.msgType = CB_FORMAT_LIST;
+    list.numFormats = copy ? 1 : 0;
+    list.formats = copy ? &format : NULL;
+    return context->cliprdr->ClientFormatList(context->cliprdr, &list) == CHANNEL_RC_OK;
+}
+
+int ll_session_clipboard_request_text(LLSession* session)
+{
+    if (!session || !session->context)
+        return 0;
+    LLContext* context = ll_context(session->context);
+    if (!context->cliprdr || !context->cliprdr->ClientFormatDataRequest)
+        return 0;
+
+    CLIPRDR_FORMAT_DATA_REQUEST request = { 0 };
+    request.common.msgType = CB_FORMAT_DATA_REQUEST;
+    request.requestedFormatId = CF_UNICODETEXT;
+    return context->cliprdr->ClientFormatDataRequest(context->cliprdr, &request) == CHANNEL_RC_OK;
 }
 
 int ll_rdp_file_parse(const char* path, LLRdpFile* result)

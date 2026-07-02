@@ -45,6 +45,8 @@ typedef struct {
     void (*cursor)(void* user_data, const uint8_t* data, uint32_t width, uint32_t height,
                    uint32_t hotspot_x, uint32_t hotspot_y);
     void (*cursor_system)(void* user_data, uint32_t kind);
+    void (*clipboard_offer_text)(void* user_data);
+    void (*clipboard_text)(void* user_data, const uint8_t* data, uint32_t size);
     uint32_t (*verify_certificate)(
         void* user_data, const char* host, uint16_t port, const char* common_name,
         const char* subject, const char* issuer, const char* fingerprint, uint32_t flags,
@@ -73,6 +75,8 @@ int ll_session_send_key(LLSession* session, uint32_t scancode, int pressed);
 int ll_session_send_mouse(LLSession* session, uint16_t flags, uint16_t x, uint16_t y);
 int ll_session_resize(LLSession* session, uint32_t width, uint32_t height,
                       uint32_t desktop_scale);
+int ll_session_clipboard_set_text(LLSession* session, const uint8_t* data, uint32_t size);
+int ll_session_clipboard_request_text(LLSession* session);
 
 int ll_rdp_file_parse(const char* path, LLRdpFile* result);
 void ll_rdp_file_clear(LLRdpFile* result);

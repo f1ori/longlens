@@ -28,6 +28,7 @@ mod secrets;
 mod config;
 mod model;
 mod rdp_file;
+mod theme_selector;
 mod destinations_page;
 mod fullscreen_bar;
 mod rdp;

@@ -28,6 +28,7 @@ use std::cell::RefCell;
 
 use crate::model::destination_object::DestinationObject;
 use crate::rdp::{RdpState, RdpWidget};
+use crate::theme_selector::LlThemeSelector;
 use crate::destinations_page::LlDestinationPage;
 use crate::fullscreen_bar::LlFullscreenBar;
 use crate::password_dialog::LongLensPasswordDialog;
@@ -70,6 +71,8 @@ mod imp {
         pub disconnectbutton: TemplateChild<gtk::Button>,
         #[template_child]
         pub adddestinationbutton: TemplateChild<adw::SplitButton>,
+        #[template_child]
+        pub primarymenubutton: TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub fullscreenbutton: TemplateChild<gtk::Button>,
         #[template_child]
@@ -237,6 +240,7 @@ mod imp {
                 }
             ));
             self.obj().setup_actions();
+            self.obj().populate_menu();
             self.setup_key_grab();
         }
     }
@@ -288,6 +292,18 @@ impl LongLensWindow {
         glib::Object::builder()
             .property("application", application)
             .build()
+    }
+
+    fn populate_menu(&self) {
+        if let Some(popover) = self
+            .imp()
+            .primarymenubutton
+            .popover()
+            .and_downcast::<gtk::PopoverMenu>()
+        {
+            let theme_selector = LlThemeSelector::new();
+            popover.add_child(&theme_selector, "theme");
+        }
     }
 
     fn setup_actions(&self) {

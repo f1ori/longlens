@@ -24,7 +24,7 @@ template $LongLensWindow: Adw.ApplicationWindow {
       }
 
       [end]
-      MenuButton {
+      MenuButton primarymenubutton {
         icon-name: "open-menu-symbolic";
         menu-model: primary_menu;
         primary: true;
@@ -122,26 +122,8 @@ menu primary_menu {
   }
 
   section {
-    submenu {
-      label: _("_Theme");
-
-      item {
-        action: "app.color-scheme";
-        label: _("_System Default");
-        target: "default";
-      }
-
-      item {
-        action: "app.color-scheme";
-        label: _("_Light");
-        target: "light";
-      }
-
-      item {
-        action: "app.color-scheme";
-        label: _("_Dark");
-        target: "dark";
-      }
+    item {
+      custom: "theme";
     }
   }
 

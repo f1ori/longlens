@@ -7,6 +7,7 @@ foreach name : [
   'destinations_page',
   'fullscreen_bar',
   'password_dialog',
+  'theme_selector',
   'window',
 ]
   blueprints += custom_target(name + '.ui',

@@ -71,6 +71,14 @@ mod imp {
                 settings.set_gtk_icon_theme_name(Some("Adwaita"));
             }
 
+            let provider = gtk::CssProvider::new();
+            provider.load_from_resource("/de/f1ori/longlens/ui/style.css");
+            gtk::style_context_add_provider_for_display(
+                &gtk::gdk::Display::default().expect("Could not connect to a display"),
+                &provider,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+
             let scheme = self.settings.get().unwrap().string("color-scheme");
             super::LongLensApplication::apply_color_scheme(&scheme);
 

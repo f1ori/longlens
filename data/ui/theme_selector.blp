@@ -1,0 +1,74 @@
+using Gtk 4.0;
+
+template $LlThemeSelector: Box {
+  hexpand: true;
+
+  styles [
+    "themeselector",
+  ]
+
+  Box {
+    hexpand: true;
+    orientation: horizontal;
+    spacing: 12;
+
+    CheckButton system {
+      // Translators: Tooltip for the theme selector option that follows the system theme
+      tooltip-text: _("Follow System Style");
+      hexpand: true;
+      halign: center;
+      focus-on-click: false;
+      toggled => $on_option_selected() swapped;
+
+      accessibility {
+        // Translators: Accessibility label for the theme selector option that follows the system theme
+        label: _("Follow System Style");
+      }
+
+      styles [
+        "theme-selector",
+        "follow",
+      ]
+    }
+
+    CheckButton light {
+      // Translators: Tooltip for the theme selector option that forces light mode
+      tooltip-text: _("Light Style");
+      group: system;
+      hexpand: true;
+      halign: center;
+      focus-on-click: false;
+      toggled => $on_option_selected() swapped;
+
+      accessibility {
+        // Translators: Accessibility label for the theme selector option that forces light mode
+        label: _("Light Style");
+      }
+
+      styles [
+        "theme-selector",
+        "light",
+      ]
+    }
+
+    CheckButton dark {
+      // Translators: Tooltip for the theme selector option that forces dark mode
+      tooltip-text: _("Dark Style");
+      group: system;
+      hexpand: true;
+      halign: center;
+      focus-on-click: false;
+      toggled => $on_option_selected() swapped;
+
+      accessibility {
+        // Translators: Accessibility label for the theme selector option that forces dark mode
+        label: _("Dark Style");
+      }
+
+      styles [
+        "theme-selector",
+        "dark",
+      ]
+    }
+  }
+}

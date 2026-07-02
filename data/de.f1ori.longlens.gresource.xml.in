@@ -6,6 +6,8 @@
     <file compressed="true" preprocess="xml-stripblanks">ui/destinations_page.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/fullscreen_bar.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/password_dialog.ui</file>
+    <file compressed="true">ui/style.css</file>
+    <file compressed="true" preprocess="xml-stripblanks">ui/theme_selector.ui</file>
     <file compressed="true" preprocess="xml-stripblanks">ui/window.ui</file>
     <file>@APP_ID@.metainfo.xml</file>
     <file>icons/hicolor/scalable/apps/@APP_ID@.svg</file>

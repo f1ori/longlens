@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-01 05:20+0000\n"
+"POT-Creation-Date: 2026-07-02 17:16+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -38,7 +38,7 @@ msgid "Add Destination"
 msgstr "Ziel hinzufügen"
 
 #: data/ui/destination_dialog.blp:14 data/ui/password_dialog.blp:14
-#: src/rdp/mod.rs:336 src/window.rs:255
+#: src/rdp/mod.rs:360 src/window.rs:259
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -94,8 +94,8 @@ msgstr "Löschen"
 msgid "Leave fullscreen"
 msgstr "Vollbild verlassen"
 
-#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:70 src/window.rs:96
-#: src/window.rs:384
+#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:70 src/window.rs:99
+#: src/window.rs:400
 msgid "Close"
 msgstr "Schließen"
 
@@ -111,11 +111,29 @@ msgstr "Verbinden"
 msgid "Host"
 msgstr "Host"
 
+#. Translators: Tooltip for the theme selector option that follows the system theme
+#. Translators: Accessibility label for the theme selector option that follows the system theme
+#: data/ui/theme_selector.blp:17 data/ui/theme_selector.blp:25
+msgid "Follow System Style"
+msgstr "Systemstil folgen"
+
+#. Translators: Tooltip for the theme selector option that forces light mode
+#. Translators: Accessibility label for the theme selector option that forces light mode
+#: data/ui/theme_selector.blp:36 data/ui/theme_selector.blp:45
+msgid "Light Style"
+msgstr "Heller Stil"
+
+#. Translators: Tooltip for the theme selector option that forces dark mode
+#. Translators: Accessibility label for the theme selector option that forces dark mode
+#: data/ui/theme_selector.blp:56 data/ui/theme_selector.blp:65
+msgid "Dark Style"
+msgstr "Dunkler Stil"
+
 #: data/ui/window.blp:7
 msgid "Long Lens"
 msgstr "Long Lens"
 
-#: data/ui/window.blp:14 src/window.rs:256
+#: data/ui/window.blp:14 src/window.rs:260
 msgid "Disconnect"
 msgstr "Trennen"
 
@@ -147,23 +165,7 @@ msgstr "Aus .rdp-Datei hinzufügen"
 msgid "_New Window"
 msgstr "_Neues Fenster"
 
-#: data/ui/window.blp:126
-msgid "_Theme"
-msgstr "_Erscheinungsbild"
-
-#: data/ui/window.blp:130
-msgid "_System Default"
-msgstr "_Systemstandard"
-
-#: data/ui/window.blp:136
-msgid "_Light"
-msgstr "_Hell"
-
-#: data/ui/window.blp:142
-msgid "_Dark"
-msgstr "_Dunkel"
-
-#: data/ui/window.blp:151
+#: data/ui/window.blp:133
 msgid "_About Long Lens"
 msgstr "_Über Long Lens"
 
@@ -171,11 +173,11 @@ msgstr "_Über Long Lens"
 msgid "Edit Destination"
 msgstr "Ziel bearbeiten"
 
-#: src/destinations_page.rs:69 src/window.rs:95
+#: src/destinations_page.rs:69 src/window.rs:98
 msgid "Connection error"
 msgstr "Verbindungsfehler"
 
-#: src/rdp/mod.rs:41
+#: src/rdp/mod.rs:54
 msgid ""
 "The username or password is incorrect. Please check your credentials and try "
 "again."
@@ -183,7 +185,7 @@ msgstr ""
 "Benutzername oder Passwort ist falsch. Bitte überprüfen Sie Ihre "
 "Anmeldedaten und versuchen Sie es erneut."
 
-#: src/rdp/mod.rs:44
+#: src/rdp/mod.rs:57
 msgid ""
 "Access was denied. The username or password may be incorrect, or this "
 "account is not allowed to connect."
@@ -191,71 +193,71 @@ msgstr ""
 "Zugriff verweigert. Benutzername oder Passwort ist möglicherweise falsch "
 "oder dieses Konto darf keine Verbindung herstellen."
 
-#: src/rdp/mod.rs:56
+#: src/rdp/mod.rs:69
 msgid "Could not connect to the server."
 msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
-#: src/rdp/mod.rs:147
+#: src/rdp/mod.rs:161
 msgid "Could not initialize FreeRDP."
 msgstr "FreeRDP konnte nicht initialisiert werden."
 
-#: src/rdp/mod.rs:284
+#: src/rdp/mod.rs:308
 msgid "The server certificate has changed"
 msgstr "Das Serverzertifikat hat sich geändert"
 
-#: src/rdp/mod.rs:286
+#: src/rdp/mod.rs:310
 msgid "Untrusted server certificate"
 msgstr "Nicht vertrauenswürdiges Serverzertifikat"
 
-#: src/rdp/mod.rs:290
+#: src/rdp/mod.rs:314
 msgid "Server"
 msgstr "Server"
 
-#: src/rdp/mod.rs:293
+#: src/rdp/mod.rs:317
 msgid "Subject"
 msgstr "Inhaber"
 
-#: src/rdp/mod.rs:295
+#: src/rdp/mod.rs:319
 msgid "Issuer"
 msgstr "Aussteller"
 
-#: src/rdp/mod.rs:297
+#: src/rdp/mod.rs:321
 msgid "Fingerprint"
 msgstr "Fingerabdruck"
 
-#: src/rdp/mod.rs:303
+#: src/rdp/mod.rs:327
 msgid "Common name"
 msgstr "Allgemeiner Name"
 
-#: src/rdp/mod.rs:310
+#: src/rdp/mod.rs:334
 msgid "The certificate name does not match this server."
 msgstr "Der Zertifikatsname stimmt nicht mit diesem Server überein."
 
-#: src/rdp/mod.rs:316
+#: src/rdp/mod.rs:340
 msgid "Previous fingerprint"
 msgstr "Vorheriger Fingerabdruck"
 
-#: src/rdp/mod.rs:323
+#: src/rdp/mod.rs:347
 msgid "Previous subject"
 msgstr "Vorheriger Inhaber"
 
-#: src/rdp/mod.rs:330
+#: src/rdp/mod.rs:354
 msgid "Previous issuer"
 msgstr "Vorheriger Aussteller"
 
-#: src/rdp/mod.rs:337
+#: src/rdp/mod.rs:361
 msgid "Trust Once"
 msgstr "Einmal vertrauen"
 
-#: src/rdp/mod.rs:338
+#: src/rdp/mod.rs:362
 msgid "Trust and Remember"
 msgstr "Vertrauen und merken"
 
-#: src/window.rs:252
+#: src/window.rs:256
 msgid "Disconnect?"
 msgstr "Trennen?"
 
-#: src/window.rs:253
+#: src/window.rs:257
 msgid ""
 "You are currently connected to a remote session. Do you want to disconnect "
 "and close?"
@@ -263,22 +265,34 @@ msgstr ""
 "Sie sind derzeit mit einer Remote-Sitzung verbunden. Möchten Sie die "
 "Verbindung trennen und schließen?"
 
-#: src/window.rs:339
+#: src/window.rs:355
 msgid "RDP Files"
 msgstr "RDP-Dateien"
 
-#: src/window.rs:345
+#: src/window.rs:361
 msgid "Open .rdp File"
 msgstr ".rdp-Datei öffnen"
 
-#: src/window.rs:381
+#: src/window.rs:397
 msgid "Could not open .rdp file"
 msgstr ".rdp-Datei konnte nicht geöffnet werden"
 
-#: src/window.rs:382
+#: src/window.rs:398
 msgid "The file could not be read or contains no valid connection."
 msgstr ""
 "Die Datei konnte nicht gelesen werden oder enthält keine gültige Verbindung."
+
+#~ msgid "_Theme"
+#~ msgstr "_Erscheinungsbild"
+
+#~ msgid "_System Default"
+#~ msgstr "_Systemstandard"
+
+#~ msgid "_Light"
+#~ msgstr "_Hell"
+
+#~ msgid "_Dark"
+#~ msgstr "_Dunkel"
 
 #~ msgid "Destination deleted"
 #~ msgstr "Ziel gelöscht"

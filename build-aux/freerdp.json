@@ -26,6 +26,7 @@
         "-DCHANNEL_RDPDR=OFF",
         "-DCHANNEL_URBDRC=OFF",
         "-DCHANNEL_SMARTCARD=OFF",
+        "-DWITH_FUSE=OFF",
         "-DWITH_X11=OFF",
         "-DWITH_WAYLAND=OFF",
         "-DWITH_KRB5=OFF",

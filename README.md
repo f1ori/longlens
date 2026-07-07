@@ -21,6 +21,7 @@ A simple, minimal, and modern RDP client
 * High-DPI display support
 * Fullscreen mode
 * Text clipboard sync between local and remote sessions
+* Based on FreeRDP
 
 ## How to install
 

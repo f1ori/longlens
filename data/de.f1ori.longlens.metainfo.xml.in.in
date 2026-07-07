@@ -72,13 +72,22 @@
   </screenshots>
 
   <releases>
+    <release version="0.4.0" date="2026-07-07">
+      <description translate="no">
+        <p>Forth beta release</p>
+        <ul>
+          <li>Use FreeRDP instead of IronRDP (provides better performance and compatibility)</li>
+          <li>Show certificate information</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-06-20">
       <description translate="no">
         <p>Third beta release</p>
         <ul>
           <li>Add support for rdp files</li>
           <li>Fix gtk shortcuts in remote mode</li>
-	  <li>Fix handling stalled connections</li>
+	        <li>Fix handling stalled connections</li>
         </ul>
       </description>
     </release>

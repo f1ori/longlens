@@ -190,7 +190,7 @@ impl Session {
         let hostname = CString::new(config.hostname).ok()?;
         let username = CString::new(config.username).ok()?;
         let domain = CString::new(config.domain).ok()?;
-        let password = CString::new(config.password.expose_secret().as_str()).ok()?;
+        let password = CString::new(config.password.expose_secret()).ok()?;
         let config_path = CString::new(config.config_path.to_string_lossy().as_bytes()).ok()?;
 
         let mut callback_context = Box::new(CallbackContext { output });

@@ -44,7 +44,7 @@ mod imp {
         }
 
         fn do_connect(&self) {
-            let password = SecretString::new(self.passwordentry.text().to_string());
+            let password = SecretString::new(self.passwordentry.text().to_string().into());
             if let Some(on_connect) = self.on_connect.borrow().as_ref() {
                 on_connect(password);
             }

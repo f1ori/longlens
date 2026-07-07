@@ -76,7 +76,7 @@ pub async fn get_password(uuid: &str) -> Option<SecretString> {
     let secret = items.first()?.secret().await.ok()?;
     String::from_utf8(secret.as_bytes().to_vec())
         .ok()
-        .map(SecretString::new)
+        .map(|secret| SecretString::new(secret.into()))
 }
 
 pub async fn delete_password(uuid: &str) {

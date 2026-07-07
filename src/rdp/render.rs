@@ -65,9 +65,7 @@ pub fn pointer_cursor(
             *out_height = (height as f64 / connection_scale).round() as i32;
             *hx = (hotspot_x as f64 / connection_scale).round() as i32;
             *hy = (hotspot_y as f64 / connection_scale).round() as i32;
-            let texture = texture.clone().upcast::<gdk::Texture>();
-            std::mem::forget(texture.clone());
-            texture
+            texture.clone().upcast::<gdk::Texture>()
         },
         None,
     )

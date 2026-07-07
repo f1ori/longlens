@@ -66,7 +66,7 @@ mod imp {
                 self.nameentry.text().to_string(),
                 self.hostnameentry.text().to_string(),
                 self.usernameentry.text().to_string(),
-                SecretString::new(self.passwordentry.text().to_string()),
+                SecretString::new(self.passwordentry.text().to_string().into()),
                 self.rememberpasswordswitch.is_active(),
             )
         }
@@ -204,7 +204,7 @@ impl LongLensDestinationDialog {
     }
 
     pub fn password(&self) -> SecretString {
-        SecretString::new(self.imp().passwordentry.text().to_string())
+        SecretString::new(self.imp().passwordentry.text().to_string().into())
     }
 
     pub fn remember_password(&self) -> bool {

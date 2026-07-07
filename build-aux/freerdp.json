@@ -37,7 +37,7 @@
         "-DWITH_SMARTCARD_EMULATE=OFF",
         "-DWITH_CUPS=OFF",
         "-DWITH_ALSA=OFF",
-        "-DWITH_PULSE=OFF",
+        "-DWITH_PULSE=ON",
         "-DWITH_OSS=OFF",
         "-DWITH_FFMPEG=ON",
         "-DWITH_DSP_FFMPEG=OFF",

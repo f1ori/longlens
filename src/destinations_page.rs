@@ -142,8 +142,14 @@ impl LlDestinationPage {
 
     /// Add a destination via the store, returning its UUID
     /// (None if a duplicate hostname+username already exists).
-    pub fn add_destination(&self, name: String, hostname: String, username: String) -> Option<String> {
-        self.store().add(name, hostname, username)
+    pub fn add_destination(
+        &self,
+        name: String,
+        hostname: String,
+        username: String,
+        sound_enabled: bool,
+    ) -> Option<String> {
+        self.store().add(name, hostname, username, sound_enabled)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -169,6 +175,7 @@ impl LlDestinationPage {
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
                 dialog.imp().usernameentry.set_text(&destination_object.username());
+                dialog.imp().forwardsoundswitch.set_active(destination_object.sound_enabled());
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
                     #[weak]
@@ -176,11 +183,11 @@ impl LlDestinationPage {
                     #[strong]
                     store,
                     #[upgrade_or_default]
-                    move |name, hostname, username, password, remember| {
+                    move |name, hostname, username, password, remember, sound_enabled| {
                         let uuid = destination_object.uuid();
                         // Updates the shared DestinationObject in place, so the
                         // bound row title/subtitle refresh automatically.
-                        store.update(&uuid, name, hostname, username);
+                        store.update(&uuid, name, hostname, username, sound_enabled);
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,
@@ -296,8 +303,8 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             #[upgrade_or_default]
-            move |name, hostname, username, password, remember| {
-                if let Some(uuid) = page.add_destination(name, hostname, username) {
+            move |name, hostname, username, password, remember, sound_enabled| {
+                if let Some(uuid) = page.add_destination(name, hostname, username, sound_enabled) {
                     if remember && !password.expose_secret().is_empty() {
                         glib::spawn_future_local(glib::clone!(
                             #[strong]

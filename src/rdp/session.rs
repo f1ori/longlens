@@ -41,6 +41,7 @@ pub struct SessionConfig {
     pub width: u32,
     pub height: u32,
     pub desktop_scale: u32,
+    pub sound_enabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -213,6 +214,7 @@ impl Session {
             width: config.width,
             height: config.height,
             desktop_scale: config.desktop_scale,
+            sound_enabled: config.sound_enabled,
         };
         let raw = NonNull::new(unsafe { ffi::ll_session_new(&native_config, &callbacks) })?;
         let native = Arc::new(NativeSession {

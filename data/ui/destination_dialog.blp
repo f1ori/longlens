@@ -60,6 +60,18 @@ template $LongLensDestinationDialog: Adw.Dialog {
           active: true;
         }
       }
+
+      Adw.PreferencesGroup {
+        Adw.ExpanderRow {
+          title: _("More Options");
+
+          Adw.SwitchRow forwardsoundswitch {
+            title: _("Forward sound");
+            subtitle: _("Play remote session audio on this device");
+            active: true;
+          }
+        }
+      }
     }
   }
 }

@@ -36,6 +36,7 @@ pub struct LLSessionConfig {
     pub width: u32,
     pub height: u32,
     pub desktop_scale: u32,
+    pub sound_enabled: bool,
 }
 
 #[repr(C)]
@@ -131,6 +132,7 @@ mod tests {
             width: 1280,
             height: 800,
             desktop_scale: 100,
+            sound_enabled: true,
         };
         let callbacks = LLSessionCallbacks {
             user_data: ptr::null_mut(),

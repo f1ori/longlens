@@ -126,6 +126,7 @@ mod imp {
             password: secrecy::SecretString,
             width: u16,
             height: u16,
+            sound_enabled: bool,
         ) {
             let Some((width, height, desktop_scale)) =
                 self.physical_size(width.into(), height.into())
@@ -152,6 +153,7 @@ mod imp {
                 width,
                 height,
                 desktop_scale,
+                sound_enabled,
             );
             let (output, receiver) = async_channel::bounded(64);
             let Some(session) = Session::spawn(config, output) else {
@@ -616,9 +618,10 @@ impl RdpWidget {
         password: secrecy::SecretString,
         width: u16,
         height: u16,
+        sound_enabled: bool,
     ) {
         self.imp()
-            .connect_to_server(hostname, port, username, password, width, height);
+            .connect_to_server(hostname, port, username, password, width, height, sound_enabled);
     }
 
     pub fn disconnect(&self) {

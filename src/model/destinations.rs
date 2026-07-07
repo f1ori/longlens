@@ -74,7 +74,13 @@ impl Destinations {
             .find_map(|(i, obj)| obj.ok().filter(|o| o.uuid() == uuid).map(|o| (i as u32, o)))
     }
 
-    pub fn add(&self, name: String, hostname: String, username: String) -> Option<String> {
+    pub fn add(
+        &self,
+        name: String,
+        hostname: String,
+        username: String,
+        sound_enabled: bool,
+    ) -> Option<String> {
         let already_exists = self
             .model
             .iter::<DestinationObject>()
@@ -83,18 +89,26 @@ impl Destinations {
         if already_exists {
             return None;
         }
-        let object = DestinationObject::new(name, hostname, username);
+        let object = DestinationObject::new(name, hostname, username, sound_enabled);
         let uuid = object.uuid();
         self.model.append(&object);
         self.save();
         Some(uuid)
     }
 
-    pub fn update(&self, uuid: &str, name: String, hostname: String, username: String) {
+    pub fn update(
+        &self,
+        uuid: &str,
+        name: String,
+        hostname: String,
+        username: String,
+        sound_enabled: bool,
+    ) {
         if let Some((_, dest)) = self.find(uuid) {
             dest.set_name(name);
             dest.set_hostname(hostname);
             dest.set_username(username);
+            dest.set_sound_enabled(sound_enabled);
             self.save();
         }
     }

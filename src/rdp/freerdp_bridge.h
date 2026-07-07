@@ -21,6 +21,7 @@
 #ifndef LONGLENS_FREERDP_BRIDGE_H
 #define LONGLENS_FREERDP_BRIDGE_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -36,6 +37,7 @@ typedef struct {
     uint32_t width;
     uint32_t height;
     uint32_t desktop_scale;
+    bool sound_enabled;
 } LLSessionConfig;
 
 typedef struct {

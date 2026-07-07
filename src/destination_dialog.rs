@@ -23,11 +23,13 @@ mod imp {
         #[template_child]
         pub passwordentry: TemplateChild<adw::PasswordEntryRow>,
         #[template_child]
+        pub forwardsoundswitch: TemplateChild<adw::SwitchRow>,
+        #[template_child]
         pub saveandconnectbutton: TemplateChild<gtk::Button>,
         #[template_child]
         pub saveonlybutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
-        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool) -> Option<String> + 'static>>>,
+        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool, bool) -> Option<String> + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
     }
 
@@ -61,28 +63,29 @@ mod imp {
             self.save_only();
         }
 
-        fn form_values(&self) -> (String, String, String, SecretString, bool) {
+        fn form_values(&self) -> (String, String, String, SecretString, bool, bool) {
             (
                 self.nameentry.text().to_string(),
                 self.hostnameentry.text().to_string(),
                 self.usernameentry.text().to_string(),
                 SecretString::new(self.passwordentry.text().to_string().into()),
                 self.rememberpasswordswitch.is_active(),
+                self.forwardsoundswitch.is_active(),
             )
         }
 
         fn save_only(&self) {
-            let (name, hostname, username, password, remember) = self.form_values();
+            let (name, hostname, username, password, remember, sound_enabled) = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(name, hostname, username, password, remember);
+                on_save(name, hostname, username, password, remember, sound_enabled);
             }
             self.obj().close();
         }
 
         fn handle_action(&self) {
-            let (name, hostname, username, password, remember) = self.form_values();
+            let (name, hostname, username, password, remember, sound_enabled) = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                if let Some(uuid) = on_save(name, hostname, username, password, remember) {
+                if let Some(uuid) = on_save(name, hostname, username, password, remember, sound_enabled) {
                     self.obj()
                         .activate_action("win.connect", Some(&uuid.to_variant()))
                         .expect("win.connect action failed");
@@ -182,7 +185,7 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(String, String, String, SecretString, bool) -> Option<String> + 'static,
+        callback: impl Fn(String, String, String, SecretString, bool, bool) -> Option<String> + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
@@ -209,5 +212,9 @@ impl LongLensDestinationDialog {
 
     pub fn remember_password(&self) -> bool {
         self.imp().rememberpasswordswitch.is_active()
+    }
+
+    pub fn sound_enabled(&self) -> bool {
+        self.imp().forwardsoundswitch.is_active()
     }
 }

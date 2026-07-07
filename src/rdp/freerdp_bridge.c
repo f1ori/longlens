@@ -478,7 +478,8 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
         freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, 100) &&
         freerdp_settings_set_bool(settings, FreeRDP_AutoLogonEnabled, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_RedirectClipboard, TRUE) &&
-        freerdp_settings_set_bool(settings, FreeRDP_AudioPlayback, FALSE) &&
+        freerdp_settings_set_bool(settings, FreeRDP_AudioPlayback,
+                                  config->sound_enabled ? TRUE : FALSE) &&
         freerdp_settings_set_bool(settings, FreeRDP_NetworkAutoDetect, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_SupportGraphicsPipeline, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_SupportDisplayControl, TRUE) &&

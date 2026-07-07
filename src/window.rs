@@ -322,13 +322,14 @@ impl LongLensWindow {
                 let hostname = dest.hostname();
                 let username = dest.username();
                 let display_title = dest.property::<String>("display-title");
+                let sound_enabled = dest.sound_enabled();
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
                     window,
                     async move {
                         match crate::secrets::get_password(&uuid).await {
                             Some(password) => {
-                                window.start_connection(hostname, username, password, display_title);
+                                window.start_connection(hostname, username, password, display_title, sound_enabled);
                             }
                             None => {
                                 let dialog = LongLensPasswordDialog::new();
@@ -338,7 +339,7 @@ impl LongLensWindow {
                                     #[weak]
                                     window,
                                     move |password| {
-                                        window.start_connection(hostname.clone(), username.clone(), password, display_title.clone());
+                                        window.start_connection(hostname.clone(), username.clone(), password, display_title.clone(), sound_enabled);
                                     }
                                 ));
                                 dialog.present(Some(&window));
@@ -401,7 +402,14 @@ impl LongLensWindow {
         dialog.present(Some(self));
     }
 
-    fn start_connection(&self, hostname: String, username: String, password: SecretString, display_title: String) {
+    fn start_connection(
+        &self,
+        hostname: String,
+        username: String,
+        password: SecretString,
+        display_title: String,
+        sound_enabled: bool,
+    ) {
         *self.imp().connection_display_title.borrow_mut() = display_title;
         let (server, port) = parse_domain_port(&hostname);
         let w = self.imp().stack.width();
@@ -409,6 +417,6 @@ impl LongLensWindow {
         let width = if w > 0 { w as u16 } else { 1280 };
         let height = if h > 0 { h as u16 } else { 800 };
         self.imp().rdpwidget
-            .connect_to_server(server, port, username, password, width, height);
+            .connect_to_server(server, port, username, password, width, height, sound_enabled);
     }
 }

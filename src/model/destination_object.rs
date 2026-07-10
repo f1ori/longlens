@@ -110,6 +110,14 @@ impl DestinationData {
             inhibit_system_shortcuts: self.inhibit_system_shortcuts,
         }
     }
+
+    pub fn display_title(&self) -> String {
+        if self.name.is_empty() {
+            self.hostname.clone()
+        } else {
+            self.name.clone()
+        }
+    }
 }
 
 mod imp {

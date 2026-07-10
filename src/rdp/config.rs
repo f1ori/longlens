@@ -32,6 +32,16 @@ pub fn split_domain(username: &str) -> (String, String) {
     }
 }
 
+pub fn parse_hostname_port(input: &str) -> (String, u16) {
+    let mut parts = input.splitn(2, ':');
+    let host = parts.next().unwrap_or("").to_string();
+    let port = parts
+        .next()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(3389);
+    (host, port)
+}
+
 pub fn build_config(
     hostname: String,
     port: u16,
@@ -90,5 +100,15 @@ mod tests {
             split_domain("DOMAIN\\sub\\user"),
             ("DOMAIN".into(), "sub\\user".into())
         );
+    }
+
+    #[test]
+    fn parse_hostname_port_default() {
+        assert_eq!(parse_hostname_port("server"), ("server".into(), 3389));
+    }
+
+    #[test]
+    fn parse_hostname_port_custom() {
+        assert_eq!(parse_hostname_port("server:3390"), ("server".into(), 3390));
     }
 }

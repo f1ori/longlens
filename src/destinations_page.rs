@@ -26,6 +26,7 @@ use gettextrs::gettext;
 use gtk::{gio, glib};
 
 use secrecy::ExposeSecret;
+use tracing::warn;
 
 use crate::application::LongLensApplication;
 use crate::destination_dialog::{DestinationFormData, LongLensDestinationDialog};
@@ -54,7 +55,7 @@ mod imp {
         fn handle_destinationslist_rowactivated(&self, row: &gtk::ListBoxRow) {
             let destination = self
                 .obj()
-                .destinations()
+                .list_model()
                 .item(row.index() as u32)
                 .expect("There needs to be an object at this position.")
                 .downcast::<DestinationObject>()
@@ -127,12 +128,12 @@ glib::wrapper! {
 impl LlDestinationPage {
     /// The backing list model, exposed for the window's stack-page logic and
     /// the `win.connect` lookup.
-    pub fn destinations(&self) -> gio::ListStore {
-        self.store().model()
+    pub fn list_model(&self) -> gio::ListStore {
+        self.destinations_store().model()
     }
 
     /// The shared destinations store that owns the model and persistence.
-    pub(crate) fn store(&self) -> Rc<Destinations> {
+    pub(crate) fn destinations_store(&self) -> Rc<Destinations> {
         self.imp()
             .destinations
             .get()
@@ -143,7 +144,13 @@ impl LlDestinationPage {
     /// Add a destination via the store, returning its UUID
     /// (None if a duplicate hostname+username already exists).
     pub fn add_destination(&self, data: DestinationData) -> Option<String> {
-        self.store().add(data)
+        self.destinations_store()
+            .add(data)
+            .map_err(|error| {
+                warn!(?error, "Could not add destination");
+                error
+            })
+            .ok()
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -164,7 +171,7 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             move |_| {
-                let store = page.store();
+                let store = page.destinations_store();
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
@@ -191,7 +198,9 @@ impl LlDestinationPage {
                         // bound row title/subtitle refresh automatically.
                         let mut data = DestinationData::new(name, hostname, username, options);
                         data.uuid = uuid.clone();
-                        store.update(data);
+                        if let Err(error) = store.update(data) {
+                            warn!(?error, "Could not update destination");
+                        }
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,
@@ -213,7 +222,9 @@ impl LlDestinationPage {
                     store,
                     move || {
                         let uuid = destination_object.uuid();
-                        store.remove(&uuid);
+                        if let Err(error) = store.remove(&uuid) {
+                            warn!(?error, "Could not remove destination");
+                        }
                         glib::spawn_future_local(async move {
                             secrets::delete_password(&uuid).await;
                         });
@@ -244,12 +255,14 @@ impl LlDestinationPage {
             self,
             move |_| {
                 let uuid = destination_object.uuid();
-                let store = page.store();
+                let store = page.destinations_store();
                 let Some((pos, _)) = store.find(&uuid) else {
                     return;
                 };
                 let saved_data = Rc::new(destination_object.destination_data());
-                store.remove(&uuid);
+                if let Err(error) = store.remove(&uuid) {
+                    warn!(?error, "Could not remove destination");
+                }
 
                 let undone = Rc::new(Cell::new(false));
                 let toast = adw::Toast::new(&gettext("Destination deleted"));
@@ -264,7 +277,9 @@ impl LlDestinationPage {
                     saved_data,
                     move |_| {
                         undone.set(true);
-                        page.store().restore(pos, (*saved_data).clone());
+                        if let Err(error) = page.destinations_store().restore(pos, (*saved_data).clone()) {
+                            warn!(?error, "Could not restore destination");
+                        }
                     }
                 ));
 

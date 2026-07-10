@@ -23,12 +23,13 @@ use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use secrecy::SecretString;
+use tracing::warn;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
-use crate::model::destination_object::{ConnectionOptions, DestinationData, DestinationObject};
+use crate::model::destination_object::{ConnectionOptions, DestinationData};
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
 use crate::destinations_page::LlDestinationPage;
@@ -45,16 +46,6 @@ fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
     } else {
         "destinationspage"
     }
-}
-
-fn parse_domain_port(input: &str) -> (String, u16) {
-    let mut parts = input.splitn(2, ':');
-    let domain = parts.next().unwrap_or("").to_string();
-    let port = parts
-        .next()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(3389);
-    (domain, port)
 }
 
 mod imp {
@@ -271,7 +262,7 @@ mod imp {
                 self,
                 move |widget| {
                     let obj = window.obj();
-                    let n = window.destinations_page.destinations().n_items();
+                    let n = window.destinations_page.list_model().n_items();
                     window.stack.set_visible_child_name(stack_page(widget.state(), n));
                     let state = widget.state();
                     if state == RdpState::Connected || state == RdpState::Connecting {
@@ -291,7 +282,7 @@ mod imp {
                     }
                 }
             ));
-            let model = self.destinations_page.destinations();
+            let model = self.destinations_page.list_model();
             self.stack.set_visible_child_name(stack_page(RdpState::default(), model.n_items()));
             model.connect_items_changed(glib::clone!(
                 #[weak(rename_to = window)]
@@ -373,18 +364,14 @@ impl LongLensWindow {
             .parameter_type(Some(glib::VariantTy::new("s").unwrap()))
             .activate(move |window: &Self, _action, parameter| {
                 let uuid: String = parameter.unwrap().get().unwrap();
-                let destinations = window.imp().destinations_page.destinations();
-                let Some(dest) = destinations
-                    .iter::<DestinationObject>()
-                    .filter_map(|r| r.ok())
-                    .find(|d| d.uuid() == uuid)
-                else {
+                let destinations = window.imp().destinations_page.destinations_store();
+                let Some(dest) = destinations.get(&uuid) else {
                     return;
                 };
-                let hostname = dest.hostname();
-                let username = dest.username();
-                let display_title = dest.property::<String>("display-title");
+                let display_title = dest.display_title();
                 let options = dest.connection_options();
+                let hostname = dest.hostname;
+                let username = dest.username;
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
                     window,
@@ -468,12 +455,8 @@ impl LongLensWindow {
         let Some(uuid) = self.imp().connection_destination_uuid.borrow().clone() else {
             return;
         };
-        let destinations = self.imp().destinations_page.destinations();
-        let Some(dest) = destinations
-            .iter::<DestinationObject>()
-            .filter_map(|r| r.ok())
-            .find(|d| d.uuid() == uuid)
-        else {
+        let destinations = self.imp().destinations_page.destinations_store();
+        let Some(dest) = destinations.get(&uuid) else {
             return;
         };
 
@@ -482,14 +465,14 @@ impl LongLensWindow {
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            #[weak]
-            dest,
             move |options| {
-                let uuid = dest.uuid();
+                let uuid = dest.uuid.clone();
                 window.apply_runtime_connection_options(options);
-                let mut data = DestinationData::new(dest.name(), dest.hostname(), dest.username(), options);
+                let mut data = DestinationData::new(dest.name.clone(), dest.hostname.clone(), dest.username.clone(), options);
                 data.uuid = uuid;
-                window.imp().destinations_page.store().update(data);
+                if let Err(error) = window.imp().destinations_page.destinations_store().update(data) {
+                    warn!(?error, "Could not update connection options");
+                }
             }
         ));
         dialog.present(Some(self));
@@ -520,7 +503,7 @@ impl LongLensWindow {
         *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
         *self.imp().connection_display_title.borrow_mut() = display_title;
         self.apply_runtime_connection_options(options);
-        let (server, port) = parse_domain_port(&hostname);
+        let (server, port) = crate::rdp::parse_hostname_port(&hostname);
         let w = self.imp().stack.width();
         let h = self.imp().stack.height();
         let width = if w > 0 { w as u16 } else { 1280 };

@@ -18,9 +18,11 @@
  */
 
 use std::fs::File;
+use std::io;
 
 use gtk::gio;
 use gtk::prelude::*;
+use tracing::warn;
 
 use super::destination_object::{DestinationData, DestinationObject};
 use crate::utils::data_path;
@@ -30,6 +32,26 @@ use crate::utils::data_path;
 #[derive(Debug)]
 pub struct Destinations {
     model: gio::ListStore,
+}
+
+#[derive(Debug)]
+pub enum DestinationError {
+    Duplicate,
+    NotFound,
+    Io(io::Error),
+    Serde(serde_json::Error),
+}
+
+impl From<io::Error> for DestinationError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<serde_json::Error> for DestinationError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Serde(error)
+    }
 }
 
 impl Destinations {
@@ -61,9 +83,15 @@ impl Destinations {
             .collect()
     }
 
-    fn save(&self) {
-        let file = File::create(data_path()).expect("Could not create json file.");
-        serde_json::to_writer(file, &self.items()).expect("Could not write data to json file");
+    fn save(&self) -> Result<(), DestinationError> {
+        let path = data_path();
+        let tmp_path = path.with_extension("json.tmp");
+        {
+            let file = File::create(&tmp_path)?;
+            serde_json::to_writer_pretty(file, &self.items())?;
+        }
+        std::fs::rename(tmp_path, path)?;
+        Ok(())
     }
 
     /// Locate a destination by UUID, returning its position and object.
@@ -74,45 +102,54 @@ impl Destinations {
             .find_map(|(i, obj)| obj.ok().filter(|o| o.uuid() == uuid).map(|o| (i as u32, o)))
     }
 
-    pub fn add(&self, data: DestinationData) -> Option<String> {
+    pub fn get(&self, uuid: &str) -> Option<DestinationData> {
+        self.find(uuid).map(|(_, obj)| obj.destination_data())
+    }
+
+    pub fn add(&self, data: DestinationData) -> Result<String, DestinationError> {
         let already_exists = self
             .model
             .iter::<DestinationObject>()
             .filter_map(|obj| obj.ok())
             .any(|d| d.hostname() == data.hostname && d.username() == data.username);
         if already_exists {
-            return None;
+            return Err(DestinationError::Duplicate);
         }
         let object = DestinationObject::from_destination_data(data);
         let uuid = object.uuid();
         self.model.append(&object);
-        self.save();
-        Some(uuid)
+        if let Err(error) = self.save() {
+            warn!(?error, "Could not save destination after add");
+            return Err(error);
+        }
+        Ok(uuid)
     }
 
-    pub fn update(&self, data: DestinationData) {
-        if let Some((_, dest)) = self.find(&data.uuid) {
-            let options = data.connection_options();
-            dest.set_name(data.name);
-            dest.set_hostname(data.hostname);
-            dest.set_username(data.username);
-            dest.set_connection_options(options);
-            self.save();
-        }
+    pub fn update(&self, data: DestinationData) -> Result<(), DestinationError> {
+        let Some((_, dest)) = self.find(&data.uuid) else {
+            return Err(DestinationError::NotFound);
+        };
+        let options = data.connection_options();
+        dest.set_name(data.name);
+        dest.set_hostname(data.hostname);
+        dest.set_username(data.username);
+        dest.set_connection_options(options);
+        self.save()
     }
 
-    pub fn remove(&self, uuid: &str) {
-        if let Some((pos, _)) = self.find(uuid) {
-            self.model.remove(pos);
-            self.save();
-        }
+    pub fn remove(&self, uuid: &str) -> Result<(), DestinationError> {
+        let Some((pos, _)) = self.find(uuid) else {
+            return Err(DestinationError::NotFound);
+        };
+        self.model.remove(pos);
+        self.save()
     }
 
     /// Re-insert a previously removed destination at `pos`, used to undo a delete.
-    pub fn restore(&self, pos: u32, data: DestinationData) {
+    pub fn restore(&self, pos: u32, data: DestinationData) -> Result<(), DestinationError> {
         self.model
             .insert(pos, &DestinationObject::from_destination_data(data));
-        self.save();
+        self.save()
     }
 
     pub fn search(&self, terms: &[String]) -> Vec<String> {

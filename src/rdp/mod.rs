@@ -20,11 +20,14 @@
 
 //! GTK widget and FreeRDP session integration.
 
+mod clipboard_codec;
 mod config;
 pub(crate) mod ffi;
 mod input;
 mod render;
 mod session;
+
+pub use config::parse_hostname_port;
 
 use gettextrs::gettext;
 use adw::prelude::*;

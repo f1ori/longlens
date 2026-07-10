@@ -38,6 +38,8 @@ pub struct DestinationData {
     pub clipboard_enabled: bool,
     #[serde(default = "default_sound_enabled")]
     pub sound_enabled: bool,
+    #[serde(default)]
+    pub forward_unicode: bool,
     #[serde(default = "default_inhibit_system_shortcuts")]
     pub inhibit_system_shortcuts: bool,
 }
@@ -70,6 +72,7 @@ mod imp {
         #[property(name = "username", get, set, type = String, member = username)]
         #[property(name = "clipboard-enabled", get, set, type = bool, member = clipboard_enabled)]
         #[property(name = "sound-enabled", get, set, type = bool, member = sound_enabled)]
+        #[property(name = "forward-unicode", get, set, type = bool, member = forward_unicode)]
         #[property(name = "inhibit-system-shortcuts", get, set, type = bool, member = inhibit_system_shortcuts)]
         pub data: RefCell<DestinationData>,
         #[property(name = "display-title", get = Self::compute_display_title, type = String)]
@@ -132,6 +135,7 @@ impl DestinationObject {
         username: String,
         clipboard_enabled: bool,
         sound_enabled: bool,
+        forward_unicode: bool,
         inhibit_system_shortcuts: bool,
     ) -> Self {
         Object::builder()
@@ -141,6 +145,7 @@ impl DestinationObject {
             .property("username", username)
             .property("clipboard-enabled", clipboard_enabled)
             .property("sound-enabled", sound_enabled)
+            .property("forward-unicode", forward_unicode)
             .property("inhibit-system-shortcuts", inhibit_system_shortcuts)
             .build()
     }
@@ -157,6 +162,7 @@ impl DestinationObject {
             .property("username", &data.username)
             .property("clipboard-enabled", data.clipboard_enabled)
             .property("sound-enabled", data.sound_enabled)
+            .property("forward-unicode", data.forward_unicode)
             .property("inhibit-system-shortcuts", data.inhibit_system_shortcuts)
             .build()
     }

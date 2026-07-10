@@ -771,6 +771,14 @@ int ll_session_send_key(LLSession* session, uint32_t scancode, int pressed)
                                                 FALSE, scancode);
 }
 
+int ll_session_send_unicode(LLSession* session, uint16_t code, int pressed)
+{
+    if (!session || !session->context || !session->context->input)
+        return 0;
+    return freerdp_input_send_unicode_keyboard_event(
+        session->context->input, pressed ? 0 : KBD_FLAGS_RELEASE, code);
+}
+
 int ll_session_send_mouse(LLSession* session, uint16_t flags, uint16_t x, uint16_t y)
 {
     if (!session || !session->context || !session->context->input)

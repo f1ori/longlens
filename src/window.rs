@@ -25,6 +25,7 @@ use gtk::{gio, glib};
 use secrecy::SecretString;
 
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
 use crate::model::destination_object::DestinationObject;
@@ -84,6 +85,8 @@ mod imp {
         pub rdpwidget: TemplateChild<RdpWidget>,
         pub connection_display_title: RefCell<String>,
         pub connection_destination_uuid: RefCell<Option<String>>,
+        pub unicode_keys: RefCell<HashMap<u16, char>>,
+        pub shortcut_modifier_keys: RefCell<HashSet<u16>>,
         pub inhibit_system_shortcuts: Cell<bool>,
     }
     #[gtk::template_callbacks]
@@ -132,11 +135,42 @@ mod imp {
                 self,
                 #[upgrade_or]
                 glib::Propagation::Proceed,
-                move |_controller, _keyval, keycode, _state| {
+                move |_controller, keyval, keycode, _state| {
                     if !window.rdpwidget.has_focus() {
                         return glib::Propagation::Proceed;
                     }
-                    window.rdpwidget.send_key(keycode as u16, true);
+                    let keycode = keycode as u16;
+                    let shortcut_modifier = matches!(
+                        keyval,
+                        gtk::gdk::Key::Control_L
+                            | gtk::gdk::Key::Control_R
+                            | gtk::gdk::Key::Alt_L
+                            | gtk::gdk::Key::Alt_R
+                            | gtk::gdk::Key::Super_L
+                            | gtk::gdk::Key::Super_R
+                            | gtk::gdk::Key::Hyper_L
+                            | gtk::gdk::Key::Hyper_R
+                            | gtk::gdk::Key::Meta_L
+                            | gtk::gdk::Key::Meta_R
+                    );
+                    if shortcut_modifier {
+                        window.shortcut_modifier_keys.borrow_mut().insert(keycode);
+                    }
+                    let shortcut_modifier_active = !window.shortcut_modifier_keys.borrow().is_empty();
+                    let unicode_char = window
+                        .rdpwidget
+                        .forward_unicode()
+                        .then(|| keyval.to_unicode())
+                        .flatten()
+                        .filter(|ch| !ch.is_control())
+                        .filter(|_| !shortcut_modifier_active);
+                    if let Some(ch) = unicode_char {
+                        window.unicode_keys.borrow_mut().insert(keycode, ch);
+                        window.rdpwidget.send_unicode_char(ch, true);
+                    } else {
+                        window.unicode_keys.borrow_mut().remove(&keycode);
+                        window.rdpwidget.send_key(keycode, true);
+                    }
                     glib::Propagation::Stop
                 }
             ));
@@ -145,7 +179,13 @@ mod imp {
                 self,
                 move |_controller, _keyval, keycode, _state| {
                     if window.rdpwidget.has_focus() {
-                        window.rdpwidget.send_key(keycode as u16, false);
+                        let keycode = keycode as u16;
+                        if let Some(ch) = window.unicode_keys.borrow_mut().remove(&keycode) {
+                            window.rdpwidget.send_unicode_char(ch, false);
+                        } else {
+                            window.rdpwidget.send_key(keycode, false);
+                        }
+                        window.shortcut_modifier_keys.borrow_mut().remove(&keycode);
                     }
                 }
             ));
@@ -346,6 +386,7 @@ impl LongLensWindow {
                 let display_title = dest.property::<String>("display-title");
                 let clipboard_enabled = dest.clipboard_enabled();
                 let sound_enabled = dest.sound_enabled();
+                let forward_unicode = dest.forward_unicode();
                 let inhibit_system_shortcuts = dest.inhibit_system_shortcuts();
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
@@ -353,7 +394,7 @@ impl LongLensWindow {
                     async move {
                         match crate::secrets::get_password(&uuid).await {
                             Some(password) => {
-                                window.start_connection(uuid, hostname, username, password, display_title, clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
+                                window.start_connection(uuid, hostname, username, password, display_title, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
                             }
                             None => {
                                 let dialog = LongLensPasswordDialog::new();
@@ -363,7 +404,7 @@ impl LongLensWindow {
                                     #[weak]
                                     window,
                                     move |password| {
-                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
+                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
                                     }
                                 ));
                                 dialog.present(Some(&window));
@@ -442,19 +483,22 @@ impl LongLensWindow {
         let dialog = LongLensConnectionOptionsDialog::new();
         dialog.set_clipboard_enabled(dest.clipboard_enabled());
         dialog.set_sound_enabled(dest.sound_enabled());
+        dialog.set_forward_unicode(dest.forward_unicode());
         dialog.set_inhibit_system_shortcuts(dest.inhibit_system_shortcuts());
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[weak]
             dest,
-            move |clipboard_enabled, sound_enabled, inhibit_system_shortcuts| {
+            move |clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
                 let uuid = dest.uuid();
                 dest.set_clipboard_enabled(clipboard_enabled);
                 dest.set_sound_enabled(sound_enabled);
+                dest.set_forward_unicode(forward_unicode);
                 dest.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
                 window.imp().inhibit_system_shortcuts.set(inhibit_system_shortcuts);
                 window.imp().rdpwidget.set_clipboard_enabled(clipboard_enabled);
+                window.imp().rdpwidget.set_forward_unicode(forward_unicode);
                 window.imp().rdpwidget.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
                 window.imp().destinations_page.store().update(
                     &uuid,
@@ -463,6 +507,7 @@ impl LongLensWindow {
                     dest.username(),
                     clipboard_enabled,
                     sound_enabled,
+                    forward_unicode,
                     inhibit_system_shortcuts,
                 );
             }
@@ -479,11 +524,13 @@ impl LongLensWindow {
         display_title: String,
         clipboard_enabled: bool,
         sound_enabled: bool,
+        forward_unicode: bool,
         inhibit_system_shortcuts: bool,
     ) {
         *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
         *self.imp().connection_display_title.borrow_mut() = display_title;
         self.imp().inhibit_system_shortcuts.set(inhibit_system_shortcuts);
+        self.imp().rdpwidget.set_forward_unicode(forward_unicode);
         self.imp().rdpwidget.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
         let (server, port) = parse_domain_port(&hostname);
         let w = self.imp().stack.width();

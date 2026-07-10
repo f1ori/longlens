@@ -149,9 +149,10 @@ impl LlDestinationPage {
         username: String,
         clipboard_enabled: bool,
         sound_enabled: bool,
+        forward_unicode: bool,
         inhibit_system_shortcuts: bool,
     ) -> Option<String> {
-        self.store().add(name, hostname, username, clipboard_enabled, sound_enabled, inhibit_system_shortcuts)
+        self.store().add(name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -179,6 +180,7 @@ impl LlDestinationPage {
                 dialog.imp().usernameentry.set_text(&destination_object.username());
                 dialog.set_clipboard_enabled(destination_object.clipboard_enabled());
                 dialog.set_sound_enabled(destination_object.sound_enabled());
+                dialog.set_forward_unicode(destination_object.forward_unicode());
                 dialog.set_inhibit_system_shortcuts(destination_object.inhibit_system_shortcuts());
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
@@ -187,11 +189,11 @@ impl LlDestinationPage {
                     #[strong]
                     store,
                     #[upgrade_or_default]
-                    move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled, inhibit_system_shortcuts| {
+                    move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
                         let uuid = destination_object.uuid();
                         // Updates the shared DestinationObject in place, so the
                         // bound row title/subtitle refresh automatically.
-                        store.update(&uuid, name, hostname, username, clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
+                        store.update(&uuid, name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,
@@ -307,8 +309,8 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             #[upgrade_or_default]
-            move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled, inhibit_system_shortcuts| {
-                if let Some(uuid) = page.add_destination(name, hostname, username, clipboard_enabled, sound_enabled, inhibit_system_shortcuts) {
+            move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
+                if let Some(uuid) = page.add_destination(name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) {
                     if remember && !password.expose_secret().is_empty() {
                         glib::spawn_future_local(glib::clone!(
                             #[strong]

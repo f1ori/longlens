@@ -498,6 +498,7 @@ mod imp {
         pub(super) pending_file_contents: RefCell<HashMap<u32, async_channel::Sender<Vec<u8>>>>,
         suppress_next_clipboard_announce: Cell<bool>,
         pub(super) clipboard_enabled: Cell<bool>,
+        pub(super) forward_unicode: Cell<bool>,
         pub(super) inhibit_system_shortcuts: Cell<bool>,
         generation: Cell<u64>,
         pointer_x: Cell<u16>,
@@ -857,6 +858,18 @@ mod imp {
             }
         }
 
+        pub fn send_unicode_char(&self, ch: char, pressed: bool) {
+            if self.state.get() != RdpState::Connected {
+                return;
+            }
+            if let Some(session) = self.session.borrow().as_ref() {
+                let mut buffer = [0; 2];
+                for code in ch.encode_utf16(&mut buffer) {
+                    session.send_unicode(*code, pressed);
+                }
+            }
+        }
+
         fn send_mouse(&self, flags: u16, x: f64, y: f64) {
             if self.state.get() != RdpState::Connected {
                 return;
@@ -1119,6 +1132,10 @@ impl RdpWidget {
         }
     }
 
+    pub fn set_forward_unicode(&self, enabled: bool) {
+        self.imp().forward_unicode.set(enabled);
+    }
+
     pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
         self.imp().inhibit_system_shortcuts.set(enabled);
         crate::utils::set_shortcuts_inhibited(self, self.state() == RdpState::Connected && enabled);
@@ -1126,5 +1143,13 @@ impl RdpWidget {
 
     pub fn send_key(&self, keycode: u16, pressed: bool) {
         self.imp().send_key(keycode, pressed);
+    }
+
+    pub fn send_unicode_char(&self, ch: char, pressed: bool) {
+        self.imp().send_unicode_char(ch, pressed);
+    }
+
+    pub fn forward_unicode(&self) -> bool {
+        self.imp().forward_unicode.get()
     }
 }

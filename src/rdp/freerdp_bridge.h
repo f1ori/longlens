@@ -81,6 +81,7 @@ const char* ll_error_string(uint32_t code);
 uint32_t ll_error_class(uint32_t code);
 
 int ll_session_send_key(LLSession* session, uint32_t scancode, int pressed);
+int ll_session_send_unicode(LLSession* session, uint16_t code, int pressed);
 int ll_session_send_mouse(LLSession* session, uint16_t flags, uint16_t x, uint16_t y);
 int ll_session_resize(LLSession* session, uint32_t width, uint32_t height,
                       uint32_t desktop_scale);

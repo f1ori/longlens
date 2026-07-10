@@ -37,6 +37,11 @@ template $LongLensConnectionOptionsDialog: Adw.Dialog {
           active: true;
         }
 
+        Adw.SwitchRow forwardunicodeswitch {
+          title: _("Forward Unicode Characters");
+          subtitle: _("Send characters instead of physical keycodes. Useful for mismatched keyboard layouts, but shortcuts may stop working.");
+        }
+
         Adw.SwitchRow inhibitsystemshortcutsswitch {
           title: _("Inhibit System Shortcuts");
           subtitle: _("Let the remote session receive system shortcuts such as Super or Alt+Tab.");

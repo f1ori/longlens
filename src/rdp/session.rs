@@ -143,6 +143,10 @@ enum SessionCommand {
         scancode: u32,
         pressed: bool,
     },
+    Unicode {
+        code: u16,
+        pressed: bool,
+    },
     Mouse {
         flags: u16,
         x: u16,
@@ -282,6 +286,12 @@ impl Session {
             .send(SessionCommand::Key { scancode, pressed });
     }
 
+    pub fn send_unicode(&self, code: u16, pressed: bool) {
+        let _ = self
+            .commands
+            .send(SessionCommand::Unicode { code, pressed });
+    }
+
     pub fn send_mouse(&self, flags: u16, x: u16, y: u16) {
         let _ = self.commands.send(SessionCommand::Mouse { flags, x, y });
     }
@@ -370,6 +380,9 @@ fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionComman
             match command {
                 SessionCommand::Key { scancode, pressed } => unsafe {
                     ffi::ll_session_send_key(native.raw.as_ptr(), scancode, pressed.into());
+                },
+                SessionCommand::Unicode { code, pressed } => unsafe {
+                    ffi::ll_session_send_unicode(native.raw.as_ptr(), code, pressed.into());
                 },
                 SessionCommand::Mouse { flags, x, y } => unsafe {
                     ffi::ll_session_send_mouse(native.raw.as_ptr(), flags, x, y);

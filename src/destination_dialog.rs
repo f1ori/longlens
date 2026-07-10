@@ -31,8 +31,9 @@ mod imp {
         pub is_edit_mode: Cell<bool>,
         pub clipboard_enabled: Cell<bool>,
         pub sound_enabled: Cell<bool>,
+        pub forward_unicode: Cell<bool>,
         pub inhibit_system_shortcuts: Cell<bool>,
-        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool, bool, bool, bool) -> Option<String> + 'static>>>,
+        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool, bool, bool, bool, bool) -> Option<String> + 'static>>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
     }
 
@@ -80,20 +81,22 @@ mod imp {
             let dialog = LongLensConnectionOptionsDialog::new();
             dialog.set_clipboard_enabled(self.clipboard_enabled.get());
             dialog.set_sound_enabled(self.sound_enabled.get());
+            dialog.set_forward_unicode(self.forward_unicode.get());
             dialog.set_inhibit_system_shortcuts(self.inhibit_system_shortcuts.get());
             dialog.set_on_save(glib::clone!(
                 #[weak(rename_to = this)]
                 self,
-                move |clipboard_enabled, sound_enabled, inhibit_system_shortcuts| {
+                move |clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
                     this.clipboard_enabled.set(clipboard_enabled);
                     this.sound_enabled.set(sound_enabled);
+                    this.forward_unicode.set(forward_unicode);
                     this.inhibit_system_shortcuts.set(inhibit_system_shortcuts);
                 }
             ));
             dialog.present(Some(&*self.obj()));
         }
 
-        fn form_values(&self) -> (String, String, String, SecretString, bool, bool, bool, bool) {
+        fn form_values(&self) -> (String, String, String, SecretString, bool, bool, bool, bool, bool) {
             (
                 self.nameentry.text().to_string(),
                 self.hostnameentry.text().to_string(),
@@ -102,22 +105,23 @@ mod imp {
                 self.rememberpasswordswitch.is_active(),
                 self.clipboard_enabled.get(),
                 self.sound_enabled.get(),
+                self.forward_unicode.get(),
                 self.inhibit_system_shortcuts.get(),
             )
         }
 
         fn save_only(&self) {
-            let (name, hostname, username, password, remember, clipboard_enabled, sound_enabled, inhibit_system_shortcuts) = self.form_values();
+            let (name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(name, hostname, username, password, remember, clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
+                on_save(name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
             }
             self.obj().close();
         }
 
         fn handle_action(&self) {
-            let (name, hostname, username, password, remember, clipboard_enabled, sound_enabled, inhibit_system_shortcuts) = self.form_values();
+            let (name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                if let Some(uuid) = on_save(name, hostname, username, password, remember, clipboard_enabled, sound_enabled, inhibit_system_shortcuts) {
+                if let Some(uuid) = on_save(name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) {
                     self.obj()
                         .activate_action("win.connect", Some(&uuid.to_variant()))
                         .expect("win.connect action failed");
@@ -149,6 +153,7 @@ mod imp {
 
             self.clipboard_enabled.set(true);
             self.sound_enabled.set(true);
+            self.forward_unicode.set(false);
             self.inhibit_system_shortcuts.set(true);
             self.saveandconnectbutton.set_sensitive(false);
             self.saveonlybutton.set_sensitive(false);
@@ -220,7 +225,7 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(String, String, String, SecretString, bool, bool, bool, bool) -> Option<String> + 'static,
+        callback: impl Fn(String, String, String, SecretString, bool, bool, bool, bool, bool) -> Option<String> + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
@@ -255,6 +260,10 @@ impl LongLensDestinationDialog {
 
     pub fn set_sound_enabled(&self, enabled: bool) {
         self.imp().sound_enabled.set(enabled);
+    }
+
+    pub fn set_forward_unicode(&self, enabled: bool) {
+        self.imp().forward_unicode.set(enabled);
     }
 
     pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {

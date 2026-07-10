@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-07 19:48+0000\n"
+"POT-Creation-Date: 2026-07-10 15:49+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -31,16 +31,66 @@ msgstr "RDP;Remote;Fernzugriff;Fernwartung;Desktop;Remotedesktop;Client;GTK;Wind
 msgid "New Window"
 msgstr "Neues Fenster"
 
-#. Translators: Big label button to create the first destination if none exists
-#: data/ui/destination_dialog.blp:5 data/ui/window.blp:57
-#: src/destination_dialog.rs:182
-msgid "Add Destination"
-msgstr "Ziel hinzufügen"
+#: data/ui/connection_options_dialog.blp:5 data/ui/destination_dialog.blp:66
+#: data/ui/window.blp:37
+msgid "Connection Options"
+msgstr "Verbindungsoptionen"
 
-#: data/ui/destination_dialog.blp:14 data/ui/password_dialog.blp:14
-#: src/rdp/mod.rs:362 src/window.rs:259
+#: data/ui/connection_options_dialog.blp:14 data/ui/destination_dialog.blp:14
+#: data/ui/password_dialog.blp:14 src/rdp/mod.rs:806 src/window.rs:297
 msgid "Cancel"
 msgstr "Abbrechen"
+
+#: data/ui/connection_options_dialog.blp:20
+msgid "Save"
+msgstr "Speichern"
+
+#: data/ui/connection_options_dialog.blp:29
+msgid "Clipboard Sync"
+msgstr "Zwischenablage synchronisieren"
+
+#: data/ui/connection_options_dialog.blp:30
+msgid "Synchronize the local and remote clipboards"
+msgstr "Lokale und entfernte Zwischenablage synchronisieren"
+
+#: data/ui/connection_options_dialog.blp:35
+msgid "Sound Playback"
+msgstr "Audiowiedergabe"
+
+#: data/ui/connection_options_dialog.blp:36
+msgid ""
+"Play remote session audio on this device. Takes effect after reconnecting."
+msgstr ""
+"Audio der Remotesitzung auf diesem Gerät wiedergeben. Wird nach dem erneuten "
+"Verbinden wirksam."
+
+#: data/ui/connection_options_dialog.blp:41
+msgid "Forward Unicode Characters"
+msgstr "Unicode-Zeichen weiterleiten"
+
+#: data/ui/connection_options_dialog.blp:42
+msgid ""
+"Send characters instead of physical keycodes. Useful for mismatched keyboard "
+"layouts, but shortcuts may stop working."
+msgstr ""
+"Zeichen statt physischer Tastencodes senden. Nützlich bei unterschiedlichen "
+"Tastaturbelegungen, aber Tastenkombinationen funktionieren möglicherweise nicht mehr."
+
+#: data/ui/connection_options_dialog.blp:46
+msgid "Inhibit System Shortcuts"
+msgstr "System-Tastenkombinationen unterdrücken"
+
+#: data/ui/connection_options_dialog.blp:47
+msgid ""
+"Let the remote session receive system shortcuts such as Super or Alt+Tab."
+msgstr ""
+"Der Remotesitzung System-Tastenkombinationen wie Super oder Alt+Tab senden."
+
+#. Translators: Big label button to create the first destination if none exists
+#: data/ui/destination_dialog.blp:5 data/ui/window.blp:65
+#: src/destination_dialog.rs:222
+msgid "Add Destination"
+msgstr "Ziel hinzufügen"
 
 #: data/ui/destination_dialog.blp:20
 msgid "Save & Connect"
@@ -82,17 +132,9 @@ msgstr "Passwort merken"
 msgid "Store the password in the keyring"
 msgstr "Das Passwort im Schlüsselbund speichern"
 
-#: data/ui/destination_dialog.blp:66
-msgid "More Options"
-msgstr "Weitere Optionen"
-
-#: data/ui/destination_dialog.blp:69
-msgid "Forward sound"
-msgstr "Audio weiterleiten"
-
-#: data/ui/destination_dialog.blp:70
-msgid "Play remote session audio on this device"
-msgstr "Audio der Remotesitzung auf diesem Gerät wiedergeben"
+#: data/ui/destination_dialog.blp:67
+msgid "Clipboard sync, sound playback, and keyboard input"
+msgstr "Zwischenablage, Audiowiedergabe und Tastatureingabe"
 
 #: data/ui/destination_row.blp:12
 msgid "Edit"
@@ -106,8 +148,8 @@ msgstr "Löschen"
 msgid "Leave fullscreen"
 msgstr "Vollbild verlassen"
 
-#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:70 src/window.rs:99
-#: src/window.rs:401
+#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:70 src/window.rs:104
+#: src/window.rs:442
 msgid "Close"
 msgstr "Schließen"
 
@@ -145,7 +187,7 @@ msgstr "Dunkler Stil"
 msgid "Long Lens"
 msgstr "Long Lens"
 
-#: data/ui/window.blp:14 src/window.rs:260
+#: data/ui/window.blp:14 src/window.rs:298
 msgid "Disconnect"
 msgstr "Trennen"
 
@@ -157,39 +199,39 @@ msgstr "Ziel hinzufügen"
 msgid "Main Menu"
 msgstr "Hauptmenü"
 
-#: data/ui/window.blp:37
+#: data/ui/window.blp:45
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: data/ui/window.blp:52
+#: data/ui/window.blp:60
 msgid "No destinations"
 msgstr "Keine Ziele"
 
-#: data/ui/window.blp:86
+#: data/ui/window.blp:94
 msgid "Connecting…"
 msgstr "Verbinde…"
 
-#: data/ui/window.blp:112
+#: data/ui/window.blp:120
 msgid "Add from .rdp File"
 msgstr "Aus .rdp-Datei hinzufügen"
 
-#: data/ui/window.blp:120
+#: data/ui/window.blp:128
 msgid "_New Window"
 msgstr "_Neues Fenster"
 
-#: data/ui/window.blp:133
+#: data/ui/window.blp:141
 msgid "_About Long Lens"
 msgstr "_Über Long Lens"
 
-#: src/destination_dialog.rs:180
+#: src/destination_dialog.rs:220
 msgid "Edit Destination"
 msgstr "Ziel bearbeiten"
 
-#: src/destinations_page.rs:69 src/window.rs:98
+#: src/destinations_page.rs:69 src/window.rs:103
 msgid "Connection error"
 msgstr "Verbindungsfehler"
 
-#: src/rdp/mod.rs:54
+#: src/rdp/mod.rs:464
 msgid ""
 "The username or password is incorrect. Please check your credentials and try "
 "again."
@@ -197,7 +239,7 @@ msgstr ""
 "Benutzername oder Passwort ist falsch. Bitte überprüfen Sie Ihre "
 "Anmeldedaten und versuchen Sie es erneut."
 
-#: src/rdp/mod.rs:57
+#: src/rdp/mod.rs:467
 msgid ""
 "Access was denied. The username or password may be incorrect, or this "
 "account is not allowed to connect."
@@ -205,71 +247,71 @@ msgstr ""
 "Zugriff verweigert. Benutzername oder Passwort ist möglicherweise falsch "
 "oder dieses Konto darf keine Verbindung herstellen."
 
-#: src/rdp/mod.rs:69
+#: src/rdp/mod.rs:479
 msgid "Could not connect to the server."
 msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
-#: src/rdp/mod.rs:163
+#: src/rdp/mod.rs:580
 msgid "Could not initialize FreeRDP."
 msgstr "FreeRDP konnte nicht initialisiert werden."
 
-#: src/rdp/mod.rs:310
+#: src/rdp/mod.rs:754
 msgid "The server certificate has changed"
 msgstr "Das Serverzertifikat hat sich geändert"
 
-#: src/rdp/mod.rs:312
+#: src/rdp/mod.rs:756
 msgid "Untrusted server certificate"
 msgstr "Nicht vertrauenswürdiges Serverzertifikat"
 
-#: src/rdp/mod.rs:316
+#: src/rdp/mod.rs:760
 msgid "Server"
 msgstr "Server"
 
-#: src/rdp/mod.rs:319
+#: src/rdp/mod.rs:763
 msgid "Subject"
 msgstr "Inhaber"
 
-#: src/rdp/mod.rs:321
+#: src/rdp/mod.rs:765
 msgid "Issuer"
 msgstr "Aussteller"
 
-#: src/rdp/mod.rs:323
+#: src/rdp/mod.rs:767
 msgid "Fingerprint"
 msgstr "Fingerabdruck"
 
-#: src/rdp/mod.rs:329
+#: src/rdp/mod.rs:773
 msgid "Common name"
 msgstr "Allgemeiner Name"
 
-#: src/rdp/mod.rs:336
+#: src/rdp/mod.rs:780
 msgid "The certificate name does not match this server."
 msgstr "Der Zertifikatsname stimmt nicht mit diesem Server überein."
 
-#: src/rdp/mod.rs:342
+#: src/rdp/mod.rs:786
 msgid "Previous fingerprint"
 msgstr "Vorheriger Fingerabdruck"
 
-#: src/rdp/mod.rs:349
+#: src/rdp/mod.rs:793
 msgid "Previous subject"
 msgstr "Vorheriger Inhaber"
 
-#: src/rdp/mod.rs:356
+#: src/rdp/mod.rs:800
 msgid "Previous issuer"
 msgstr "Vorheriger Aussteller"
 
-#: src/rdp/mod.rs:363
+#: src/rdp/mod.rs:807
 msgid "Trust Once"
 msgstr "Einmal vertrauen"
 
-#: src/rdp/mod.rs:364
+#: src/rdp/mod.rs:808
 msgid "Trust and Remember"
 msgstr "Vertrauen und merken"
 
-#: src/window.rs:256
+#: src/window.rs:294
 msgid "Disconnect?"
 msgstr "Trennen?"
 
-#: src/window.rs:257
+#: src/window.rs:295
 msgid ""
 "You are currently connected to a remote session. Do you want to disconnect "
 "and close?"
@@ -277,22 +319,28 @@ msgstr ""
 "Sie sind derzeit mit einer Remote-Sitzung verbunden. Möchten Sie die "
 "Verbindung trennen und schließen?"
 
-#: src/window.rs:356
+#: src/window.rs:397
 msgid "RDP Files"
 msgstr "RDP-Dateien"
 
-#: src/window.rs:362
+#: src/window.rs:403
 msgid "Open .rdp File"
 msgstr ".rdp-Datei öffnen"
 
-#: src/window.rs:398
+#: src/window.rs:439
 msgid "Could not open .rdp file"
 msgstr ".rdp-Datei konnte nicht geöffnet werden"
 
-#: src/window.rs:399
+#: src/window.rs:440
 msgid "The file could not be read or contains no valid connection."
 msgstr ""
 "Die Datei konnte nicht gelesen werden oder enthält keine gültige Verbindung."
+
+#~ msgid "More Options"
+#~ msgstr "Weitere Optionen"
+
+#~ msgid "Forward sound"
+#~ msgstr "Audio weiterleiten"
 
 #~ msgid "More"
 #~ msgstr "Mehr"

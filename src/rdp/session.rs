@@ -21,12 +21,15 @@
 //! Safe ownership and worker-thread integration for the FreeRDP C adapter.
 
 use std::ffi::{CStr, CString, c_char, c_void};
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 
 use secrecy::{ExposeSecret, SecretString};
+use tracing::{info, warn};
 
 use super::ffi;
 
@@ -81,6 +84,21 @@ impl CertificateDecision {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct LocalClipboardFile {
+    pub path: PathBuf,
+    pub name: String,
+    pub size: u64,
+    pub is_directory: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteClipboardFile {
+    pub name: String,
+    pub size: u64,
+    pub is_directory: bool,
+}
+
 #[derive(Debug)]
 pub enum SessionEvent {
     Frame {
@@ -100,6 +118,9 @@ pub enum SessionEvent {
     CursorDefault,
     ClipboardText(String),
     ClipboardRemoteTextAvailable,
+    ClipboardRemoteFilesAvailable,
+    ClipboardRemoteFiles(Vec<RemoteClipboardFile>),
+    ClipboardRemoteFileContents { stream_id: u32, data: Vec<u8> },
     CertificateRequest {
         details: CertificateDetails,
         response: mpsc::SyncSender<CertificateDecision>,
@@ -133,12 +154,27 @@ enum SessionCommand {
         desktop_scale: u32,
     },
     ClipboardSetText(String),
+    ClipboardSetFiles(Vec<LocalClipboardFile>),
     ClipboardRequestText,
+    ClipboardRequestFiles,
+    ClipboardUnlockRemoteFiles,
+    ClipboardRequestFileSize {
+        stream_id: u32,
+        index: u32,
+    },
+    ClipboardRequestFileContents {
+        stream_id: u32,
+        index: u32,
+        offset: u64,
+        size: u32,
+    },
     Disconnect,
 }
 
 struct CallbackContext {
     output: async_channel::Sender<SessionEvent>,
+    local_files: Mutex<Vec<LocalClipboardFile>>,
+    next_stream_id: AtomicU32,
 }
 
 struct NativeSession {
@@ -194,7 +230,11 @@ impl Session {
         let password = CString::new(config.password.expose_secret()).ok()?;
         let config_path = CString::new(config.config_path.to_string_lossy().as_bytes()).ok()?;
 
-        let mut callback_context = Box::new(CallbackContext { output });
+        let mut callback_context = Box::new(CallbackContext {
+            output,
+            local_files: Mutex::new(Vec::new()),
+            next_stream_id: AtomicU32::new(1),
+        });
         let callbacks = ffi::LLSessionCallbacks {
             user_data: (&mut *callback_context as *mut CallbackContext).cast(),
             frame: Some(frame_callback),
@@ -202,6 +242,11 @@ impl Session {
             cursor_system: Some(cursor_system_callback),
             clipboard_offer_text: Some(clipboard_offer_text_callback),
             clipboard_text: Some(clipboard_text_callback),
+            clipboard_offer_files: Some(clipboard_offer_files_callback),
+            clipboard_files: Some(clipboard_files_callback),
+            clipboard_file_contents_response: Some(clipboard_file_contents_response_callback),
+            clipboard_file_size: Some(clipboard_file_size_callback),
+            clipboard_file_contents: Some(clipboard_file_contents_callback),
             verify_certificate: Some(certificate_callback),
         };
         let native_config = ffi::LLSessionConfig {
@@ -253,8 +298,50 @@ impl Session {
         let _ = self.commands.send(SessionCommand::ClipboardSetText(text));
     }
 
+    pub fn set_clipboard_files(&self, files: Vec<LocalClipboardFile>) {
+        let _ = self.commands.send(SessionCommand::ClipboardSetFiles(files));
+    }
+
     pub fn request_clipboard_text(&self) {
         let _ = self.commands.send(SessionCommand::ClipboardRequestText);
+    }
+
+    pub fn request_clipboard_files(&self) {
+        info!("Requesting remote clipboard file descriptor list");
+        let _ = self.commands.send(SessionCommand::ClipboardRequestFiles);
+    }
+
+    pub fn unlock_remote_clipboard_files(&self) {
+        info!("Unlocking remote clipboard file data");
+        let _ = self.commands.send(SessionCommand::ClipboardUnlockRemoteFiles);
+    }
+
+    pub fn request_clipboard_file_size(&self, stream_id: u32, index: u32) {
+        info!(stream_id, index, "Requesting remote clipboard file size");
+        let _ = self.commands.send(SessionCommand::ClipboardRequestFileSize {
+            stream_id,
+            index,
+        });
+    }
+
+    pub fn request_clipboard_file_contents(
+        &self,
+        stream_id: u32,
+        index: u32,
+        offset: u64,
+        size: u32,
+    ) {
+        info!(stream_id, index, offset, size, "Requesting remote clipboard file content range");
+        let _ = self.commands.send(SessionCommand::ClipboardRequestFileContents {
+            stream_id,
+            index,
+            offset,
+            size,
+        });
+    }
+
+    pub fn next_stream_id(&self) -> u32 {
+        self.native._callbacks.next_stream_id.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn disconnect(&self) {
@@ -300,6 +387,9 @@ fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionComman
                     );
                 },
                 SessionCommand::ClipboardSetText(text) => {
+                    if let Ok(mut files) = native._callbacks.local_files.lock() {
+                        files.clear();
+                    }
                     let data = encode_clipboard_text(&text);
                     unsafe {
                         ffi::ll_session_clipboard_set_text(
@@ -309,8 +399,50 @@ fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionComman
                         );
                     }
                 }
+                SessionCommand::ClipboardSetFiles(files) => {
+                    let descriptor = encode_file_group_descriptor(&files);
+                    let count = files.len() as u32;
+                    if let Ok(mut stored) = native._callbacks.local_files.lock() {
+                        *stored = files;
+                    }
+                    unsafe {
+                        ffi::ll_session_clipboard_set_files(
+                            native.raw.as_ptr(),
+                            descriptor.as_ptr(),
+                            descriptor.len() as u32,
+                            count,
+                        );
+                    }
+                }
                 SessionCommand::ClipboardRequestText => unsafe {
                     ffi::ll_session_clipboard_request_text(native.raw.as_ptr());
+                },
+                SessionCommand::ClipboardRequestFiles => unsafe {
+                    ffi::ll_session_clipboard_request_files(native.raw.as_ptr());
+                },
+                SessionCommand::ClipboardUnlockRemoteFiles => unsafe {
+                    ffi::ll_session_clipboard_unlock_remote_files(native.raw.as_ptr());
+                },
+                SessionCommand::ClipboardRequestFileSize { stream_id, index } => unsafe {
+                    ffi::ll_session_clipboard_request_file_size(
+                        native.raw.as_ptr(),
+                        stream_id,
+                        index,
+                    );
+                },
+                SessionCommand::ClipboardRequestFileContents {
+                    stream_id,
+                    index,
+                    offset,
+                    size,
+                } => unsafe {
+                    ffi::ll_session_clipboard_request_file_contents(
+                        native.raw.as_ptr(),
+                        stream_id,
+                        index,
+                        offset,
+                        size,
+                    );
                 },
                 SessionCommand::Disconnect => {
                     unsafe { ffi::ll_session_disconnect(native.raw.as_ptr()) };
@@ -403,6 +535,7 @@ unsafe extern "C" fn clipboard_offer_text_callback(user_data: *mut c_void) {
     if user_data.is_null() {
         return;
     }
+    info!("Remote clipboard offered text");
     let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
     let _ = context
         .output
@@ -415,9 +548,105 @@ unsafe extern "C" fn clipboard_text_callback(user_data: *mut c_void, data: *cons
     }
     let bytes = unsafe { std::slice::from_raw_parts(data, size as usize) };
     if let Some(text) = decode_clipboard_text(bytes) {
+        info!(chars = text.chars().count(), "Received remote clipboard text");
         let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
         let _ = context.output.send_blocking(SessionEvent::ClipboardText(text));
+    } else {
+        warn!(size, "Could not decode remote clipboard text");
     }
+}
+
+unsafe extern "C" fn clipboard_offer_files_callback(user_data: *mut c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    info!("Remote clipboard offered files");
+    let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+    let _ = context
+        .output
+        .send_blocking(SessionEvent::ClipboardRemoteFilesAvailable);
+}
+
+unsafe extern "C" fn clipboard_files_callback(user_data: *mut c_void, data: *const u8, size: u32) {
+    if user_data.is_null() || data.is_null() {
+        return;
+    }
+    info!(size, "Received remote clipboard file descriptor data");
+    let bytes = unsafe { std::slice::from_raw_parts(data, size as usize) };
+    if let Some(files) = decode_file_group_descriptor(bytes) {
+        info!(count = files.len(), ?files, "Decoded remote clipboard file descriptors");
+        let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+        let _ = context
+            .output
+            .send_blocking(SessionEvent::ClipboardRemoteFiles(files));
+    } else {
+        let hex = bytes
+            .iter()
+            .take(64)
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        warn!(size, %hex, "Could not decode remote clipboard file descriptors");
+    }
+}
+
+unsafe extern "C" fn clipboard_file_contents_response_callback(
+    user_data: *mut c_void,
+    stream_id: u32,
+    data: *const u8,
+    size: u32,
+) {
+    if user_data.is_null() || data.is_null() {
+        return;
+    }
+    info!(stream_id, size, "Received remote clipboard file content response");
+    let data = unsafe { std::slice::from_raw_parts(data, size as usize) }.to_vec();
+    let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+    let _ = context
+        .output
+        .send_blocking(SessionEvent::ClipboardRemoteFileContents { stream_id, data });
+}
+
+unsafe extern "C" fn clipboard_file_size_callback(user_data: *mut c_void, index: u32) -> u64 {
+    if user_data.is_null() {
+        return 0;
+    }
+    let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+    context
+        .local_files
+        .lock()
+        .ok()
+        .and_then(|files| files.get(index as usize).map(|file| file.size))
+        .unwrap_or(0)
+}
+
+unsafe extern "C" fn clipboard_file_contents_callback(
+    user_data: *mut c_void,
+    index: u32,
+    offset: u64,
+    data: *mut u8,
+    size: u32,
+) -> u32 {
+    if user_data.is_null() || data.is_null() || size == 0 {
+        return 0;
+    }
+    let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+    let Some(path) = context
+        .local_files
+        .lock()
+        .ok()
+        .and_then(|files| files.get(index as usize).map(|file| file.path.clone()))
+    else {
+        return 0;
+    };
+    let Ok(mut file) = File::open(path) else {
+        return 0;
+    };
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        return 0;
+    }
+    let buffer = unsafe { std::slice::from_raw_parts_mut(data, size as usize) };
+    file.read(buffer).unwrap_or_default() as u32
 }
 
 fn encode_clipboard_text(text: &str) -> Vec<u8> {
@@ -426,6 +655,82 @@ fn encode_clipboard_text(text: &str) -> Vec<u8> {
         data.extend_from_slice(&unit.to_le_bytes());
     }
     data
+}
+
+fn encode_file_group_descriptor(files: &[LocalClipboardFile]) -> Vec<u8> {
+    const FILEDESCRIPTORW_SIZE: usize = 592;
+    const FD_ATTRIBUTES: u32 = 0x0000_0004;
+    const FD_FILESIZE: u32 = 0x0000_0040;
+    const FD_UNICODE: u32 = 0x8000_0000;
+    const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x0000_0010;
+    const FILE_ATTRIBUTE_NORMAL: u32 = 0x0000_0080;
+
+    let mut data = Vec::with_capacity(4 + files.len() * FILEDESCRIPTORW_SIZE);
+    data.extend_from_slice(&(files.len() as u32).to_le_bytes());
+    for file in files {
+        let start = data.len();
+        data.resize(start + FILEDESCRIPTORW_SIZE, 0);
+        data[start..start + 4]
+            .copy_from_slice(&(FD_UNICODE | FD_ATTRIBUTES | FD_FILESIZE).to_le_bytes());
+        let attributes = if file.is_directory {
+            FILE_ATTRIBUTE_DIRECTORY
+        } else {
+            FILE_ATTRIBUTE_NORMAL
+        };
+        data[start + 36..start + 40].copy_from_slice(&attributes.to_le_bytes());
+        data[start + 64..start + 68].copy_from_slice(&((file.size >> 32) as u32).to_le_bytes());
+        data[start + 68..start + 72].copy_from_slice(&(file.size as u32).to_le_bytes());
+        for (i, unit) in file.name.encode_utf16().take(259).enumerate() {
+            let offset = start + 72 + i * 2;
+            data[offset..offset + 2].copy_from_slice(&unit.to_le_bytes());
+        }
+    }
+    data
+}
+
+fn decode_file_group_descriptor(data: &[u8]) -> Option<Vec<RemoteClipboardFile>> {
+    const FILEDESCRIPTORW_SIZE: usize = 592;
+    const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x0000_0010;
+    if data.len() < 4 {
+        return None;
+    }
+    let count = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
+    if data.len() < 4 + count.checked_mul(FILEDESCRIPTORW_SIZE)? {
+        return None;
+    }
+    let mut files = Vec::with_capacity(count);
+    for i in 0..count {
+        let start = 4 + i * FILEDESCRIPTORW_SIZE;
+        let attributes = u32::from_le_bytes(data[start + 36..start + 40].try_into().ok()?);
+        let size_high = u32::from_le_bytes(data[start + 64..start + 68].try_into().ok()?);
+        let size_low = u32::from_le_bytes(data[start + 68..start + 72].try_into().ok()?);
+        let mut units = Vec::new();
+        for chunk in data[start + 72..start + 72 + 520].chunks_exact(2) {
+            let unit = u16::from_le_bytes([chunk[0], chunk[1]]);
+            if unit == 0 {
+                break;
+            }
+            units.push(unit);
+        }
+        let name = sanitize_remote_file_name(&String::from_utf16(&units).ok()?)?;
+        files.push(RemoteClipboardFile {
+            name,
+            size: ((size_high as u64) << 32) | size_low as u64,
+            is_directory: attributes & FILE_ATTRIBUTE_DIRECTORY != 0,
+        });
+    }
+    Some(files)
+}
+
+fn sanitize_remote_file_name(name: &str) -> Option<String> {
+    let name = name.replace('\\', "/");
+    let path = std::path::Path::new(&name);
+    let file_name = path.file_name()?.to_str()?.to_owned();
+    if file_name.is_empty() || file_name == "." || file_name == ".." {
+        None
+    } else {
+        Some(file_name)
+    }
 }
 
 fn decode_clipboard_text(data: &[u8]) -> Option<String> {

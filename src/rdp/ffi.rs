@@ -47,6 +47,13 @@ pub struct LLSessionCallbacks {
     pub cursor_system: Option<unsafe extern "C" fn(*mut c_void, u32)>,
     pub clipboard_offer_text: Option<unsafe extern "C" fn(*mut c_void)>,
     pub clipboard_text: Option<unsafe extern "C" fn(*mut c_void, *const u8, u32)>,
+    pub clipboard_offer_files: Option<unsafe extern "C" fn(*mut c_void)>,
+    pub clipboard_files: Option<unsafe extern "C" fn(*mut c_void, *const u8, u32)>,
+    pub clipboard_file_contents_response:
+        Option<unsafe extern "C" fn(*mut c_void, u32, *const u8, u32)>,
+    pub clipboard_file_size: Option<unsafe extern "C" fn(*mut c_void, u32) -> u64>,
+    pub clipboard_file_contents:
+        Option<unsafe extern "C" fn(*mut c_void, u32, u64, *mut u8, u32) -> u32>,
     pub verify_certificate: Option<
         unsafe extern "C" fn(
             *mut c_void,
@@ -105,7 +112,27 @@ unsafe extern "C" {
         data: *const u8,
         size: u32,
     ) -> i32;
+    pub fn ll_session_clipboard_set_files(
+        session: *mut LLSession,
+        descriptor: *const u8,
+        size: u32,
+        count: u32,
+    ) -> i32;
     pub fn ll_session_clipboard_request_text(session: *mut LLSession) -> i32;
+    pub fn ll_session_clipboard_request_files(session: *mut LLSession) -> i32;
+    pub fn ll_session_clipboard_unlock_remote_files(session: *mut LLSession) -> i32;
+    pub fn ll_session_clipboard_request_file_size(
+        session: *mut LLSession,
+        stream_id: u32,
+        index: u32,
+    ) -> i32;
+    pub fn ll_session_clipboard_request_file_contents(
+        session: *mut LLSession,
+        stream_id: u32,
+        index: u32,
+        offset: u64,
+        size: u32,
+    ) -> i32;
 
     pub fn ll_rdp_file_parse(path: *const c_char, result: *mut LLRdpFile) -> i32;
     pub fn ll_rdp_file_clear(result: *mut LLRdpFile);
@@ -141,6 +168,11 @@ mod tests {
             cursor_system: None,
             clipboard_offer_text: None,
             clipboard_text: None,
+            clipboard_offer_files: None,
+            clipboard_files: None,
+            clipboard_file_contents_response: None,
+            clipboard_file_size: None,
+            clipboard_file_contents: None,
             verify_certificate: None,
         };
         let session = unsafe { ll_session_new(&config, &callbacks) };

@@ -17,7 +17,7 @@
       <li>GNOME Search Provider for destinations (can be enabled in GNOME Settings)</li>
       <li>High-DPI display support</li>
       <li>Fullscreen mode</li>
-      <li>Text clipboard sync between local and remote sessions</li>
+      <li>Text and file clipboard sync between local and remote sessions</li>
     </ul>
   </description>
 

@@ -49,6 +49,13 @@ typedef struct {
     void (*cursor_system)(void* user_data, uint32_t kind);
     void (*clipboard_offer_text)(void* user_data);
     void (*clipboard_text)(void* user_data, const uint8_t* data, uint32_t size);
+    void (*clipboard_offer_files)(void* user_data);
+    void (*clipboard_files)(void* user_data, const uint8_t* data, uint32_t size);
+    void (*clipboard_file_contents_response)(void* user_data, uint32_t stream_id,
+                                             const uint8_t* data, uint32_t size);
+    uint64_t (*clipboard_file_size)(void* user_data, uint32_t index);
+    uint32_t (*clipboard_file_contents)(void* user_data, uint32_t index, uint64_t offset,
+                                        uint8_t* data, uint32_t size);
     uint32_t (*verify_certificate)(
         void* user_data, const char* host, uint16_t port, const char* common_name,
         const char* subject, const char* issuer, const char* fingerprint, uint32_t flags,
@@ -78,7 +85,15 @@ int ll_session_send_mouse(LLSession* session, uint16_t flags, uint16_t x, uint16
 int ll_session_resize(LLSession* session, uint32_t width, uint32_t height,
                       uint32_t desktop_scale);
 int ll_session_clipboard_set_text(LLSession* session, const uint8_t* data, uint32_t size);
+int ll_session_clipboard_set_files(LLSession* session, const uint8_t* descriptor, uint32_t size,
+                                   uint32_t count);
 int ll_session_clipboard_request_text(LLSession* session);
+int ll_session_clipboard_request_files(LLSession* session);
+int ll_session_clipboard_unlock_remote_files(LLSession* session);
+int ll_session_clipboard_request_file_size(LLSession* session, uint32_t stream_id,
+                                           uint32_t index);
+int ll_session_clipboard_request_file_contents(LLSession* session, uint32_t stream_id,
+                                               uint32_t index, uint64_t offset, uint32_t size);
 
 int ll_rdp_file_parse(const char* path, LLRdpFile* result);
 void ll_rdp_file_clear(LLRdpFile* result);

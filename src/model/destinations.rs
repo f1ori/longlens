@@ -81,6 +81,7 @@ impl Destinations {
         username: String,
         clipboard_enabled: bool,
         sound_enabled: bool,
+        inhibit_system_shortcuts: bool,
     ) -> Option<String> {
         let already_exists = self
             .model
@@ -90,7 +91,7 @@ impl Destinations {
         if already_exists {
             return None;
         }
-        let object = DestinationObject::new(name, hostname, username, clipboard_enabled, sound_enabled);
+        let object = DestinationObject::new(name, hostname, username, clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
         let uuid = object.uuid();
         self.model.append(&object);
         self.save();
@@ -105,6 +106,7 @@ impl Destinations {
         username: String,
         clipboard_enabled: bool,
         sound_enabled: bool,
+        inhibit_system_shortcuts: bool,
     ) {
         if let Some((_, dest)) = self.find(uuid) {
             dest.set_name(name);
@@ -112,6 +114,7 @@ impl Destinations {
             dest.set_username(username);
             dest.set_clipboard_enabled(clipboard_enabled);
             dest.set_sound_enabled(sound_enabled);
+            dest.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
             self.save();
         }
     }

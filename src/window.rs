@@ -24,7 +24,7 @@ use gettextrs::gettext;
 use gtk::{gio, glib};
 use secrecy::SecretString;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
 use crate::model::destination_object::DestinationObject;
@@ -84,6 +84,7 @@ mod imp {
         pub rdpwidget: TemplateChild<RdpWidget>,
         pub connection_display_title: RefCell<String>,
         pub connection_destination_uuid: RefCell<Option<String>>,
+        pub inhibit_system_shortcuts: Cell<bool>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -236,7 +237,10 @@ mod imp {
                     if state == RdpState::Connected || state == RdpState::Connecting {
                         let display_title = window.connection_display_title.borrow().clone();
                         obj.set_title(Some(&display_title));
-                        crate::utils::set_shortcuts_inhibited(&*obj, state == RdpState::Connected);
+                        crate::utils::set_shortcuts_inhibited(
+                            &*obj,
+                            state == RdpState::Connected && window.inhibit_system_shortcuts.get(),
+                        );
                     } else {
                         window.connection_destination_uuid.borrow_mut().take();
                         obj.set_title(Some(&gettext("Long Lens")));
@@ -342,13 +346,14 @@ impl LongLensWindow {
                 let display_title = dest.property::<String>("display-title");
                 let clipboard_enabled = dest.clipboard_enabled();
                 let sound_enabled = dest.sound_enabled();
+                let inhibit_system_shortcuts = dest.inhibit_system_shortcuts();
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
                     window,
                     async move {
                         match crate::secrets::get_password(&uuid).await {
                             Some(password) => {
-                                window.start_connection(uuid, hostname, username, password, display_title, clipboard_enabled, sound_enabled);
+                                window.start_connection(uuid, hostname, username, password, display_title, clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
                             }
                             None => {
                                 let dialog = LongLensPasswordDialog::new();
@@ -358,7 +363,7 @@ impl LongLensWindow {
                                     #[weak]
                                     window,
                                     move |password| {
-                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), clipboard_enabled, sound_enabled);
+                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), clipboard_enabled, sound_enabled, inhibit_system_shortcuts);
                                     }
                                 ));
                                 dialog.present(Some(&window));
@@ -437,16 +442,20 @@ impl LongLensWindow {
         let dialog = LongLensConnectionOptionsDialog::new();
         dialog.set_clipboard_enabled(dest.clipboard_enabled());
         dialog.set_sound_enabled(dest.sound_enabled());
+        dialog.set_inhibit_system_shortcuts(dest.inhibit_system_shortcuts());
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[weak]
             dest,
-            move |clipboard_enabled, sound_enabled| {
+            move |clipboard_enabled, sound_enabled, inhibit_system_shortcuts| {
                 let uuid = dest.uuid();
                 dest.set_clipboard_enabled(clipboard_enabled);
                 dest.set_sound_enabled(sound_enabled);
+                dest.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
+                window.imp().inhibit_system_shortcuts.set(inhibit_system_shortcuts);
                 window.imp().rdpwidget.set_clipboard_enabled(clipboard_enabled);
+                window.imp().rdpwidget.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
                 window.imp().destinations_page.store().update(
                     &uuid,
                     dest.name(),
@@ -454,6 +463,7 @@ impl LongLensWindow {
                     dest.username(),
                     clipboard_enabled,
                     sound_enabled,
+                    inhibit_system_shortcuts,
                 );
             }
         ));
@@ -469,9 +479,12 @@ impl LongLensWindow {
         display_title: String,
         clipboard_enabled: bool,
         sound_enabled: bool,
+        inhibit_system_shortcuts: bool,
     ) {
         *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
         *self.imp().connection_display_title.borrow_mut() = display_title;
+        self.imp().inhibit_system_shortcuts.set(inhibit_system_shortcuts);
+        self.imp().rdpwidget.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
         let (server, port) = parse_domain_port(&hostname);
         let w = self.imp().stack.width();
         let h = self.imp().stack.height();

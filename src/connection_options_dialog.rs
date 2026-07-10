@@ -14,7 +14,9 @@ mod imp {
         pub clipboardswitch: TemplateChild<adw::SwitchRow>,
         #[template_child]
         pub soundswitch: TemplateChild<adw::SwitchRow>,
-        pub on_save: RefCell<Option<Box<dyn Fn(bool, bool) + 'static>>>,
+        #[template_child]
+        pub inhibitsystemshortcutsswitch: TemplateChild<adw::SwitchRow>,
+        pub on_save: RefCell<Option<Box<dyn Fn(bool, bool, bool) + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensConnectionOptionsDialog {
@@ -36,6 +38,7 @@ mod imp {
                 on_save(
                     self.clipboardswitch.is_active(),
                     self.soundswitch.is_active(),
+                    self.inhibitsystemshortcutsswitch.is_active(),
                 );
             }
             self.obj().close();
@@ -82,7 +85,11 @@ impl LongLensConnectionOptionsDialog {
         self.imp().soundswitch.set_active(enabled);
     }
 
-    pub fn set_on_save(&self, callback: impl Fn(bool, bool) + 'static) {
+    pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
+        self.imp().inhibitsystemshortcutsswitch.set_active(enabled);
+    }
+
+    pub fn set_on_save(&self, callback: impl Fn(bool, bool, bool) + 'static) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
 }

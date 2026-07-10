@@ -36,6 +36,12 @@ template $LongLensConnectionOptionsDialog: Adw.Dialog {
           subtitle: _("Play remote session audio on this device. Takes effect after reconnecting.");
           active: true;
         }
+
+        Adw.SwitchRow inhibitsystemshortcutsswitch {
+          title: _("Inhibit System Shortcuts");
+          subtitle: _("Let the remote session receive system shortcuts such as Super or Alt+Tab.");
+          active: true;
+        }
       }
     }
   }

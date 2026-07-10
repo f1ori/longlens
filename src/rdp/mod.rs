@@ -498,6 +498,7 @@ mod imp {
         pub(super) pending_file_contents: RefCell<HashMap<u32, async_channel::Sender<Vec<u8>>>>,
         suppress_next_clipboard_announce: Cell<bool>,
         pub(super) clipboard_enabled: Cell<bool>,
+        pub(super) inhibit_system_shortcuts: Cell<bool>,
         generation: Cell<u64>,
         pointer_x: Cell<u16>,
         pointer_y: Cell<u16>,
@@ -885,7 +886,7 @@ mod imp {
                         let obj = imp.obj();
                         obj.grab_focus();
                         imp.announce_local_clipboard();
-                        crate::utils::set_shortcuts_inhibited(&*obj, true);
+                        crate::utils::set_shortcuts_inhibited(&*obj, imp.inhibit_system_shortcuts.get());
                     }
                 }
             ));
@@ -1116,6 +1117,11 @@ impl RdpWidget {
         if enabled {
             imp.announce_local_clipboard();
         }
+    }
+
+    pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
+        self.imp().inhibit_system_shortcuts.set(enabled);
+        crate::utils::set_shortcuts_inhibited(self, self.state() == RdpState::Connected && enabled);
     }
 
     pub fn send_key(&self, keycode: u16, pressed: bool) {

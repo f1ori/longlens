@@ -38,6 +38,8 @@ use std::io::Write;
 use std::sync::{OnceLock, mpsc};
 use tracing::{info, warn};
 
+use crate::model::destination_object::ConnectionOptions;
+
 use session::{
     CertificateDecision, CertificateDetails, ConnectionError, LocalClipboardFile,
     RemoteClipboardFile, Session, SessionEvent,
@@ -541,8 +543,7 @@ mod imp {
             password: secrecy::SecretString,
             width: u16,
             height: u16,
-            clipboard_enabled: bool,
-            sound_enabled: bool,
+            options: ConnectionOptions,
         ) {
             let Some((width, height, desktop_scale)) =
                 self.physical_size(width.into(), height.into())
@@ -559,7 +560,7 @@ mod imp {
             let generation = self.generation.get().wrapping_add(1);
             self.generation.set(generation);
             self.connection_scale.set(self.surface_scale());
-            self.clipboard_enabled.set(clipboard_enabled);
+            self.clipboard_enabled.set(options.clipboard_enabled);
             self.obj().set_state(RdpState::Connecting);
 
             let config = config::build_config(
@@ -570,7 +571,7 @@ mod imp {
                 width,
                 height,
                 desktop_scale,
-                sound_enabled,
+                options.sound_enabled,
             );
             let (output, receiver) = async_channel::bounded(64);
             let Some(session) = Session::spawn(config, output) else {
@@ -1105,8 +1106,7 @@ impl RdpWidget {
         password: secrecy::SecretString,
         width: u16,
         height: u16,
-        clipboard_enabled: bool,
-        sound_enabled: bool,
+        options: ConnectionOptions,
     ) {
         self.imp().connect_to_server(
             hostname,
@@ -1115,8 +1115,7 @@ impl RdpWidget {
             password,
             width,
             height,
-            clipboard_enabled,
-            sound_enabled,
+            options,
         );
     }
 

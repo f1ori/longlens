@@ -26,6 +26,29 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConnectionOptions {
+    #[serde(default = "default_clipboard_enabled")]
+    pub clipboard_enabled: bool,
+    #[serde(default = "default_sound_enabled")]
+    pub sound_enabled: bool,
+    #[serde(default)]
+    pub forward_unicode: bool,
+    #[serde(default = "default_inhibit_system_shortcuts")]
+    pub inhibit_system_shortcuts: bool,
+}
+
+impl Default for ConnectionOptions {
+    fn default() -> Self {
+        Self {
+            clipboard_enabled: true,
+            sound_enabled: true,
+            forward_unicode: false,
+            inhibit_system_shortcuts: true,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct DestinationData {
     #[serde(default = "new_uuid")]
@@ -49,15 +72,15 @@ fn new_uuid() -> String {
 }
 
 fn default_clipboard_enabled() -> bool {
-    true
+    ConnectionOptions::default().clipboard_enabled
 }
 
 fn default_sound_enabled() -> bool {
-    true
+    ConnectionOptions::default().sound_enabled
 }
 
 fn default_inhibit_system_shortcuts() -> bool {
-    true
+    ConnectionOptions::default().inhibit_system_shortcuts
 }
 
 mod imp {
@@ -133,20 +156,17 @@ impl DestinationObject {
         name: String,
         hostname: String,
         username: String,
-        clipboard_enabled: bool,
-        sound_enabled: bool,
-        forward_unicode: bool,
-        inhibit_system_shortcuts: bool,
+        options: ConnectionOptions,
     ) -> Self {
         Object::builder()
             .property("uuid", Uuid::new_v4().to_string())
             .property("name", name)
             .property("hostname", hostname)
             .property("username", username)
-            .property("clipboard-enabled", clipboard_enabled)
-            .property("sound-enabled", sound_enabled)
-            .property("forward-unicode", forward_unicode)
-            .property("inhibit-system-shortcuts", inhibit_system_shortcuts)
+            .property("clipboard-enabled", options.clipboard_enabled)
+            .property("sound-enabled", options.sound_enabled)
+            .property("forward-unicode", options.forward_unicode)
+            .property("inhibit-system-shortcuts", options.inhibit_system_shortcuts)
             .build()
     }
 
@@ -165,5 +185,22 @@ impl DestinationObject {
             .property("forward-unicode", data.forward_unicode)
             .property("inhibit-system-shortcuts", data.inhibit_system_shortcuts)
             .build()
+    }
+
+    pub fn connection_options(&self) -> ConnectionOptions {
+        let data = self.imp().data.borrow();
+        ConnectionOptions {
+            clipboard_enabled: data.clipboard_enabled,
+            sound_enabled: data.sound_enabled,
+            forward_unicode: data.forward_unicode,
+            inhibit_system_shortcuts: data.inhibit_system_shortcuts,
+        }
+    }
+
+    pub fn set_connection_options(&self, options: ConnectionOptions) {
+        self.set_clipboard_enabled(options.clipboard_enabled);
+        self.set_sound_enabled(options.sound_enabled);
+        self.set_forward_unicode(options.forward_unicode);
+        self.set_inhibit_system_shortcuts(options.inhibit_system_shortcuts);
     }
 }

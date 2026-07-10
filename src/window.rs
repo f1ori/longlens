@@ -28,7 +28,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
-use crate::model::destination_object::DestinationObject;
+use crate::model::destination_object::{ConnectionOptions, DestinationObject};
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
 use crate::destinations_page::LlDestinationPage;
@@ -384,17 +384,14 @@ impl LongLensWindow {
                 let hostname = dest.hostname();
                 let username = dest.username();
                 let display_title = dest.property::<String>("display-title");
-                let clipboard_enabled = dest.clipboard_enabled();
-                let sound_enabled = dest.sound_enabled();
-                let forward_unicode = dest.forward_unicode();
-                let inhibit_system_shortcuts = dest.inhibit_system_shortcuts();
+                let options = dest.connection_options();
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
                     window,
                     async move {
                         match crate::secrets::get_password(&uuid).await {
                             Some(password) => {
-                                window.start_connection(uuid, hostname, username, password, display_title, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
+                                window.start_connection(uuid, hostname, username, password, display_title, options);
                             }
                             None => {
                                 let dialog = LongLensPasswordDialog::new();
@@ -404,7 +401,7 @@ impl LongLensWindow {
                                     #[weak]
                                     window,
                                     move |password| {
-                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
+                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), options);
                                     }
                                 ));
                                 dialog.present(Some(&window));
@@ -481,38 +478,39 @@ impl LongLensWindow {
         };
 
         let dialog = LongLensConnectionOptionsDialog::new();
-        dialog.set_clipboard_enabled(dest.clipboard_enabled());
-        dialog.set_sound_enabled(dest.sound_enabled());
-        dialog.set_forward_unicode(dest.forward_unicode());
-        dialog.set_inhibit_system_shortcuts(dest.inhibit_system_shortcuts());
+        dialog.set_connection_options(dest.connection_options());
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[weak]
             dest,
-            move |clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
+            move |options| {
                 let uuid = dest.uuid();
-                dest.set_clipboard_enabled(clipboard_enabled);
-                dest.set_sound_enabled(sound_enabled);
-                dest.set_forward_unicode(forward_unicode);
-                dest.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
-                window.imp().inhibit_system_shortcuts.set(inhibit_system_shortcuts);
-                window.imp().rdpwidget.set_clipboard_enabled(clipboard_enabled);
-                window.imp().rdpwidget.set_forward_unicode(forward_unicode);
-                window.imp().rdpwidget.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
+                dest.set_connection_options(options);
+                window.apply_runtime_connection_options(options);
                 window.imp().destinations_page.store().update(
                     &uuid,
                     dest.name(),
                     dest.hostname(),
                     dest.username(),
-                    clipboard_enabled,
-                    sound_enabled,
-                    forward_unicode,
-                    inhibit_system_shortcuts,
+                    options,
                 );
             }
         ));
         dialog.present(Some(self));
+    }
+
+    fn apply_runtime_connection_options(&self, options: ConnectionOptions) {
+        self.imp()
+            .inhibit_system_shortcuts
+            .set(options.inhibit_system_shortcuts);
+        self.imp()
+            .rdpwidget
+            .set_clipboard_enabled(options.clipboard_enabled);
+        self.imp().rdpwidget.set_forward_unicode(options.forward_unicode);
+        self.imp()
+            .rdpwidget
+            .set_inhibit_system_shortcuts(options.inhibit_system_shortcuts);
     }
 
     fn start_connection(
@@ -522,22 +520,17 @@ impl LongLensWindow {
         username: String,
         password: SecretString,
         display_title: String,
-        clipboard_enabled: bool,
-        sound_enabled: bool,
-        forward_unicode: bool,
-        inhibit_system_shortcuts: bool,
+        options: ConnectionOptions,
     ) {
         *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
         *self.imp().connection_display_title.borrow_mut() = display_title;
-        self.imp().inhibit_system_shortcuts.set(inhibit_system_shortcuts);
-        self.imp().rdpwidget.set_forward_unicode(forward_unicode);
-        self.imp().rdpwidget.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
+        self.apply_runtime_connection_options(options);
         let (server, port) = parse_domain_port(&hostname);
         let w = self.imp().stack.width();
         let h = self.imp().stack.height();
         let width = if w > 0 { w as u16 } else { 1280 };
         let height = if h > 0 { h as u16 } else { 800 };
         self.imp().rdpwidget
-            .connect_to_server(server, port, username, password, width, height, clipboard_enabled, sound_enabled);
+            .connect_to_server(server, port, username, password, width, height, options);
     }
 }

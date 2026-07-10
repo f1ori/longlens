@@ -22,7 +22,7 @@ use std::fs::File;
 use gtk::gio;
 use gtk::prelude::*;
 
-use super::destination_object::{DestinationData, DestinationObject};
+use super::destination_object::{ConnectionOptions, DestinationData, DestinationObject};
 use crate::utils::data_path;
 
 /// Owns the `gio::ListStore` of `DestinationObject`s as the single source of
@@ -79,10 +79,7 @@ impl Destinations {
         name: String,
         hostname: String,
         username: String,
-        clipboard_enabled: bool,
-        sound_enabled: bool,
-        forward_unicode: bool,
-        inhibit_system_shortcuts: bool,
+        options: ConnectionOptions,
     ) -> Option<String> {
         let already_exists = self
             .model
@@ -92,7 +89,7 @@ impl Destinations {
         if already_exists {
             return None;
         }
-        let object = DestinationObject::new(name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
+        let object = DestinationObject::new(name, hostname, username, options);
         let uuid = object.uuid();
         self.model.append(&object);
         self.save();
@@ -105,19 +102,13 @@ impl Destinations {
         name: String,
         hostname: String,
         username: String,
-        clipboard_enabled: bool,
-        sound_enabled: bool,
-        forward_unicode: bool,
-        inhibit_system_shortcuts: bool,
+        options: ConnectionOptions,
     ) {
         if let Some((_, dest)) = self.find(uuid) {
             dest.set_name(name);
             dest.set_hostname(hostname);
             dest.set_username(username);
-            dest.set_clipboard_enabled(clipboard_enabled);
-            dest.set_sound_enabled(sound_enabled);
-            dest.set_forward_unicode(forward_unicode);
-            dest.set_inhibit_system_shortcuts(inhibit_system_shortcuts);
+            dest.set_connection_options(options);
             self.save();
         }
     }

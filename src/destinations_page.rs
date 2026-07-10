@@ -29,7 +29,7 @@ use secrecy::ExposeSecret;
 
 use crate::application::LongLensApplication;
 use crate::destination_dialog::LongLensDestinationDialog;
-use crate::model::destination_object::DestinationObject;
+use crate::model::destination_object::{ConnectionOptions, DestinationObject};
 use crate::destination_row::LlDestinationRow;
 use crate::model::destinations::Destinations;
 use crate::secrets;
@@ -147,12 +147,9 @@ impl LlDestinationPage {
         name: String,
         hostname: String,
         username: String,
-        clipboard_enabled: bool,
-        sound_enabled: bool,
-        forward_unicode: bool,
-        inhibit_system_shortcuts: bool,
+        options: ConnectionOptions,
     ) -> Option<String> {
-        self.store().add(name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts)
+        self.store().add(name, hostname, username, options)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -178,10 +175,7 @@ impl LlDestinationPage {
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
                 dialog.imp().usernameentry.set_text(&destination_object.username());
-                dialog.set_clipboard_enabled(destination_object.clipboard_enabled());
-                dialog.set_sound_enabled(destination_object.sound_enabled());
-                dialog.set_forward_unicode(destination_object.forward_unicode());
-                dialog.set_inhibit_system_shortcuts(destination_object.inhibit_system_shortcuts());
+                dialog.set_connection_options(destination_object.connection_options());
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
                     #[weak]
@@ -189,11 +183,11 @@ impl LlDestinationPage {
                     #[strong]
                     store,
                     #[upgrade_or_default]
-                    move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
+                    move |name, hostname, username, password, remember, options| {
                         let uuid = destination_object.uuid();
                         // Updates the shared DestinationObject in place, so the
                         // bound row title/subtitle refresh automatically.
-                        store.update(&uuid, name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
+                        store.update(&uuid, name, hostname, username, options);
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,
@@ -309,8 +303,8 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             #[upgrade_or_default]
-            move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
-                if let Some(uuid) = page.add_destination(name, hostname, username, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) {
+            move |name, hostname, username, password, remember, options| {
+                if let Some(uuid) = page.add_destination(name, hostname, username, options) {
                     if remember && !password.expose_secret().is_empty() {
                         glib::spawn_future_local(glib::clone!(
                             #[strong]

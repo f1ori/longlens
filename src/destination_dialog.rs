@@ -7,9 +7,15 @@ use gtk::glib;
 use secrecy::SecretString;
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
+use crate::model::destination_object::ConnectionOptions;
 
 mod imp {
     use super::*;
+
+    type SaveCallback = Box<
+        dyn Fn(String, String, String, SecretString, bool, ConnectionOptions) -> Option<String>
+            + 'static,
+    >;
 
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destination_dialog.ui")]
@@ -29,11 +35,8 @@ mod imp {
         #[template_child]
         pub saveonlybutton: TemplateChild<gtk::Button>,
         pub is_edit_mode: Cell<bool>,
-        pub clipboard_enabled: Cell<bool>,
-        pub sound_enabled: Cell<bool>,
-        pub forward_unicode: Cell<bool>,
-        pub inhibit_system_shortcuts: Cell<bool>,
-        pub on_save: RefCell<Option<Box<dyn Fn(String, String, String, SecretString, bool, bool, bool, bool, bool) -> Option<String> + 'static>>>,
+        pub connection_options: Cell<ConnectionOptions>,
+        pub on_save: RefCell<Option<SaveCallback>>,
         pub on_delete: RefCell<Option<Box<dyn Fn() + 'static>>>,
     }
 
@@ -79,49 +82,40 @@ mod imp {
 
         fn show_options_dialog(&self) {
             let dialog = LongLensConnectionOptionsDialog::new();
-            dialog.set_clipboard_enabled(self.clipboard_enabled.get());
-            dialog.set_sound_enabled(self.sound_enabled.get());
-            dialog.set_forward_unicode(self.forward_unicode.get());
-            dialog.set_inhibit_system_shortcuts(self.inhibit_system_shortcuts.get());
+            dialog.set_connection_options(self.connection_options.get());
             dialog.set_on_save(glib::clone!(
                 #[weak(rename_to = this)]
                 self,
-                move |clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts| {
-                    this.clipboard_enabled.set(clipboard_enabled);
-                    this.sound_enabled.set(sound_enabled);
-                    this.forward_unicode.set(forward_unicode);
-                    this.inhibit_system_shortcuts.set(inhibit_system_shortcuts);
+                move |options| {
+                    this.connection_options.set(options);
                 }
             ));
             dialog.present(Some(&*self.obj()));
         }
 
-        fn form_values(&self) -> (String, String, String, SecretString, bool, bool, bool, bool, bool) {
+        fn form_values(&self) -> (String, String, String, SecretString, bool, ConnectionOptions) {
             (
                 self.nameentry.text().to_string(),
                 self.hostnameentry.text().to_string(),
                 self.usernameentry.text().to_string(),
                 SecretString::new(self.passwordentry.text().to_string().into()),
                 self.rememberpasswordswitch.is_active(),
-                self.clipboard_enabled.get(),
-                self.sound_enabled.get(),
-                self.forward_unicode.get(),
-                self.inhibit_system_shortcuts.get(),
+                self.connection_options.get(),
             )
         }
 
         fn save_only(&self) {
-            let (name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) = self.form_values();
+            let (name, hostname, username, password, remember, options) = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts);
+                on_save(name, hostname, username, password, remember, options);
             }
             self.obj().close();
         }
 
         fn handle_action(&self) {
-            let (name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) = self.form_values();
+            let (name, hostname, username, password, remember, options) = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                if let Some(uuid) = on_save(name, hostname, username, password, remember, clipboard_enabled, sound_enabled, forward_unicode, inhibit_system_shortcuts) {
+                if let Some(uuid) = on_save(name, hostname, username, password, remember, options) {
                     self.obj()
                         .activate_action("win.connect", Some(&uuid.to_variant()))
                         .expect("win.connect action failed");
@@ -151,10 +145,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            self.clipboard_enabled.set(true);
-            self.sound_enabled.set(true);
-            self.forward_unicode.set(false);
-            self.inhibit_system_shortcuts.set(true);
+            self.connection_options.set(ConnectionOptions::default());
             self.saveandconnectbutton.set_sensitive(false);
             self.saveonlybutton.set_sensitive(false);
             self.hostnameentry.connect_notify_local(
@@ -225,7 +216,8 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(String, String, String, SecretString, bool, bool, bool, bool, bool) -> Option<String> + 'static,
+        callback: impl Fn(String, String, String, SecretString, bool, ConnectionOptions) -> Option<String>
+            + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
@@ -254,27 +246,11 @@ impl LongLensDestinationDialog {
         self.imp().rememberpasswordswitch.is_active()
     }
 
-    pub fn set_clipboard_enabled(&self, enabled: bool) {
-        self.imp().clipboard_enabled.set(enabled);
+    pub fn set_connection_options(&self, options: ConnectionOptions) {
+        self.imp().connection_options.set(options);
     }
 
-    pub fn set_sound_enabled(&self, enabled: bool) {
-        self.imp().sound_enabled.set(enabled);
-    }
-
-    pub fn set_forward_unicode(&self, enabled: bool) {
-        self.imp().forward_unicode.set(enabled);
-    }
-
-    pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
-        self.imp().inhibit_system_shortcuts.set(enabled);
-    }
-
-    pub fn clipboard_enabled(&self) -> bool {
-        self.imp().clipboard_enabled.get()
-    }
-
-    pub fn sound_enabled(&self) -> bool {
-        self.imp().sound_enabled.get()
+    pub fn connection_options(&self) -> ConnectionOptions {
+        self.imp().connection_options.get()
     }
 }

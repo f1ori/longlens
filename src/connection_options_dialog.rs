@@ -4,6 +4,8 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::glib;
 
+use crate::model::destination_object::ConnectionOptions;
+
 mod imp {
     use super::*;
 
@@ -18,7 +20,7 @@ mod imp {
         pub forwardunicodeswitch: TemplateChild<adw::SwitchRow>,
         #[template_child]
         pub inhibitsystemshortcutsswitch: TemplateChild<adw::SwitchRow>,
-        pub on_save: RefCell<Option<Box<dyn Fn(bool, bool, bool, bool) + 'static>>>,
+        pub on_save: RefCell<Option<Box<dyn Fn(ConnectionOptions) + 'static>>>,
     }
 
     impl std::fmt::Debug for LongLensConnectionOptionsDialog {
@@ -37,12 +39,7 @@ mod imp {
         #[template_callback]
         fn handle_savebutton_clicked(&self, _button: &gtk::Button) {
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(
-                    self.clipboardswitch.is_active(),
-                    self.soundswitch.is_active(),
-                    self.forwardunicodeswitch.is_active(),
-                    self.inhibitsystemshortcutsswitch.is_active(),
-                );
+                on_save(self.obj().connection_options());
             }
             self.obj().close();
         }
@@ -80,23 +77,25 @@ impl LongLensConnectionOptionsDialog {
         glib::Object::builder().build()
     }
 
-    pub fn set_clipboard_enabled(&self, enabled: bool) {
-        self.imp().clipboardswitch.set_active(enabled);
+    pub fn set_connection_options(&self, options: ConnectionOptions) {
+        self.imp().clipboardswitch.set_active(options.clipboard_enabled);
+        self.imp().soundswitch.set_active(options.sound_enabled);
+        self.imp().forwardunicodeswitch.set_active(options.forward_unicode);
+        self.imp()
+            .inhibitsystemshortcutsswitch
+            .set_active(options.inhibit_system_shortcuts);
     }
 
-    pub fn set_sound_enabled(&self, enabled: bool) {
-        self.imp().soundswitch.set_active(enabled);
+    pub fn connection_options(&self) -> ConnectionOptions {
+        ConnectionOptions {
+            clipboard_enabled: self.imp().clipboardswitch.is_active(),
+            sound_enabled: self.imp().soundswitch.is_active(),
+            forward_unicode: self.imp().forwardunicodeswitch.is_active(),
+            inhibit_system_shortcuts: self.imp().inhibitsystemshortcutsswitch.is_active(),
+        }
     }
 
-    pub fn set_forward_unicode(&self, enabled: bool) {
-        self.imp().forwardunicodeswitch.set_active(enabled);
-    }
-
-    pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
-        self.imp().inhibitsystemshortcutsswitch.set_active(enabled);
-    }
-
-    pub fn set_on_save(&self, callback: impl Fn(bool, bool, bool, bool) + 'static) {
+    pub fn set_on_save(&self, callback: impl Fn(ConnectionOptions) + 'static) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
 }

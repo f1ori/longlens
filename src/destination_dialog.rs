@@ -7,15 +7,27 @@ use gtk::glib;
 use secrecy::SecretString;
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
-use crate::model::destination_object::ConnectionOptions;
+use crate::model::destination_object::{ConnectionOptions, DestinationData};
+
+pub struct DestinationFormData {
+    pub name: String,
+    pub hostname: String,
+    pub username: String,
+    pub password: SecretString,
+    pub remember_password: bool,
+    pub options: ConnectionOptions,
+}
+
+impl DestinationFormData {
+    pub fn into_destination_data(self) -> DestinationData {
+        DestinationData::new(self.name, self.hostname, self.username, self.options)
+    }
+}
 
 mod imp {
     use super::*;
 
-    type SaveCallback = Box<
-        dyn Fn(String, String, String, SecretString, bool, ConnectionOptions) -> Option<String>
-            + 'static,
-    >;
+    type SaveCallback = Box<dyn Fn(DestinationFormData) -> Option<String> + 'static>;
 
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destination_dialog.ui")]
@@ -93,29 +105,29 @@ mod imp {
             dialog.present(Some(&*self.obj()));
         }
 
-        fn form_values(&self) -> (String, String, String, SecretString, bool, ConnectionOptions) {
-            (
-                self.nameentry.text().to_string(),
-                self.hostnameentry.text().to_string(),
-                self.usernameentry.text().to_string(),
-                SecretString::new(self.passwordentry.text().to_string().into()),
-                self.rememberpasswordswitch.is_active(),
-                self.connection_options.get(),
-            )
+        fn form_values(&self) -> DestinationFormData {
+            DestinationFormData {
+                name: self.nameentry.text().to_string(),
+                hostname: self.hostnameentry.text().to_string(),
+                username: self.usernameentry.text().to_string(),
+                password: SecretString::new(self.passwordentry.text().to_string().into()),
+                remember_password: self.rememberpasswordswitch.is_active(),
+                options: self.connection_options.get(),
+            }
         }
 
         fn save_only(&self) {
-            let (name, hostname, username, password, remember, options) = self.form_values();
+            let form_data = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(name, hostname, username, password, remember, options);
+                on_save(form_data);
             }
             self.obj().close();
         }
 
         fn handle_action(&self) {
-            let (name, hostname, username, password, remember, options) = self.form_values();
+            let form_data = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                if let Some(uuid) = on_save(name, hostname, username, password, remember, options) {
+                if let Some(uuid) = on_save(form_data) {
                     self.obj()
                         .activate_action("win.connect", Some(&uuid.to_variant()))
                         .expect("win.connect action failed");
@@ -216,8 +228,7 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(String, String, String, SecretString, bool, ConnectionOptions) -> Option<String>
-            + 'static,
+        callback: impl Fn(DestinationFormData) -> Option<String> + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }

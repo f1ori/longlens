@@ -28,8 +28,8 @@ use gtk::{gio, glib};
 use secrecy::ExposeSecret;
 
 use crate::application::LongLensApplication;
-use crate::destination_dialog::LongLensDestinationDialog;
-use crate::model::destination_object::{ConnectionOptions, DestinationObject};
+use crate::destination_dialog::{DestinationFormData, LongLensDestinationDialog};
+use crate::model::destination_object::{DestinationData, DestinationObject};
 use crate::destination_row::LlDestinationRow;
 use crate::model::destinations::Destinations;
 use crate::secrets;
@@ -142,14 +142,8 @@ impl LlDestinationPage {
 
     /// Add a destination via the store, returning its UUID
     /// (None if a duplicate hostname+username already exists).
-    pub fn add_destination(
-        &self,
-        name: String,
-        hostname: String,
-        username: String,
-        options: ConnectionOptions,
-    ) -> Option<String> {
-        self.store().add(name, hostname, username, options)
+    pub fn add_destination(&self, data: DestinationData) -> Option<String> {
+        self.store().add(data)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -183,16 +177,26 @@ impl LlDestinationPage {
                     #[strong]
                     store,
                     #[upgrade_or_default]
-                    move |name, hostname, username, password, remember, options| {
+                    move |form_data| {
+                        let DestinationFormData {
+                            name,
+                            hostname,
+                            username,
+                            password,
+                            remember_password,
+                            options,
+                        } = form_data;
                         let uuid = destination_object.uuid();
                         // Updates the shared DestinationObject in place, so the
                         // bound row title/subtitle refresh automatically.
-                        store.update(&uuid, name, hostname, username, options);
+                        let mut data = DestinationData::new(name, hostname, username, options);
+                        data.uuid = uuid.clone();
+                        store.update(data);
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,
                             async move {
-                                if remember && !password.expose_secret().is_empty() {
+                                if remember_password && !password.expose_secret().is_empty() {
                                     secrets::store_password(&uuid, &password).await;
                                 } else {
                                     secrets::delete_password(&uuid).await;
@@ -303,9 +307,17 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             #[upgrade_or_default]
-            move |name, hostname, username, password, remember, options| {
-                if let Some(uuid) = page.add_destination(name, hostname, username, options) {
-                    if remember && !password.expose_secret().is_empty() {
+            move |form_data| {
+                let DestinationFormData {
+                    name,
+                    hostname,
+                    username,
+                    password,
+                    remember_password,
+                    options,
+                } = form_data;
+                if let Some(uuid) = page.add_destination(DestinationData::new(name, hostname, username, options)) {
+                    if remember_password && !password.expose_secret().is_empty() {
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,

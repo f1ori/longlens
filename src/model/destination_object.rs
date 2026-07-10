@@ -83,6 +83,35 @@ fn default_inhibit_system_shortcuts() -> bool {
     ConnectionOptions::default().inhibit_system_shortcuts
 }
 
+impl DestinationData {
+    pub fn new(
+        name: String,
+        hostname: String,
+        username: String,
+        options: ConnectionOptions,
+    ) -> Self {
+        Self {
+            uuid: new_uuid(),
+            name,
+            hostname,
+            username,
+            clipboard_enabled: options.clipboard_enabled,
+            sound_enabled: options.sound_enabled,
+            forward_unicode: options.forward_unicode,
+            inhibit_system_shortcuts: options.inhibit_system_shortcuts,
+        }
+    }
+
+    pub fn connection_options(&self) -> ConnectionOptions {
+        ConnectionOptions {
+            clipboard_enabled: self.clipboard_enabled,
+            sound_enabled: self.sound_enabled,
+            forward_unicode: self.forward_unicode,
+            inhibit_system_shortcuts: self.inhibit_system_shortcuts,
+        }
+    }
+}
+
 mod imp {
     use super::*;
 
@@ -152,24 +181,6 @@ glib::wrapper! {
 }
 
 impl DestinationObject {
-    pub fn new(
-        name: String,
-        hostname: String,
-        username: String,
-        options: ConnectionOptions,
-    ) -> Self {
-        Object::builder()
-            .property("uuid", Uuid::new_v4().to_string())
-            .property("name", name)
-            .property("hostname", hostname)
-            .property("username", username)
-            .property("clipboard-enabled", options.clipboard_enabled)
-            .property("sound-enabled", options.sound_enabled)
-            .property("forward-unicode", options.forward_unicode)
-            .property("inhibit-system-shortcuts", options.inhibit_system_shortcuts)
-            .build()
-    }
-
     pub fn destination_data(&self) -> DestinationData {
         self.imp().data.borrow().clone()
     }
@@ -188,13 +199,7 @@ impl DestinationObject {
     }
 
     pub fn connection_options(&self) -> ConnectionOptions {
-        let data = self.imp().data.borrow();
-        ConnectionOptions {
-            clipboard_enabled: data.clipboard_enabled,
-            sound_enabled: data.sound_enabled,
-            forward_unicode: data.forward_unicode,
-            inhibit_system_shortcuts: data.inhibit_system_shortcuts,
-        }
+        self.imp().data.borrow().connection_options()
     }
 
     pub fn set_connection_options(&self, options: ConnectionOptions) {

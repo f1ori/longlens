@@ -22,7 +22,7 @@ use std::fs::File;
 use gtk::gio;
 use gtk::prelude::*;
 
-use super::destination_object::{ConnectionOptions, DestinationData, DestinationObject};
+use super::destination_object::{DestinationData, DestinationObject};
 use crate::utils::data_path;
 
 /// Owns the `gio::ListStore` of `DestinationObject`s as the single source of
@@ -74,40 +74,28 @@ impl Destinations {
             .find_map(|(i, obj)| obj.ok().filter(|o| o.uuid() == uuid).map(|o| (i as u32, o)))
     }
 
-    pub fn add(
-        &self,
-        name: String,
-        hostname: String,
-        username: String,
-        options: ConnectionOptions,
-    ) -> Option<String> {
+    pub fn add(&self, data: DestinationData) -> Option<String> {
         let already_exists = self
             .model
             .iter::<DestinationObject>()
             .filter_map(|obj| obj.ok())
-            .any(|d| d.hostname() == hostname && d.username() == username);
+            .any(|d| d.hostname() == data.hostname && d.username() == data.username);
         if already_exists {
             return None;
         }
-        let object = DestinationObject::new(name, hostname, username, options);
+        let object = DestinationObject::from_destination_data(data);
         let uuid = object.uuid();
         self.model.append(&object);
         self.save();
         Some(uuid)
     }
 
-    pub fn update(
-        &self,
-        uuid: &str,
-        name: String,
-        hostname: String,
-        username: String,
-        options: ConnectionOptions,
-    ) {
-        if let Some((_, dest)) = self.find(uuid) {
-            dest.set_name(name);
-            dest.set_hostname(hostname);
-            dest.set_username(username);
+    pub fn update(&self, data: DestinationData) {
+        if let Some((_, dest)) = self.find(&data.uuid) {
+            let options = data.connection_options();
+            dest.set_name(data.name);
+            dest.set_hostname(data.hostname);
+            dest.set_username(data.username);
             dest.set_connection_options(options);
             self.save();
         }

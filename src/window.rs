@@ -28,7 +28,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
-use crate::model::destination_object::{ConnectionOptions, DestinationObject};
+use crate::model::destination_object::{ConnectionOptions, DestinationData, DestinationObject};
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
 use crate::destinations_page::LlDestinationPage;
@@ -486,15 +486,10 @@ impl LongLensWindow {
             dest,
             move |options| {
                 let uuid = dest.uuid();
-                dest.set_connection_options(options);
                 window.apply_runtime_connection_options(options);
-                window.imp().destinations_page.store().update(
-                    &uuid,
-                    dest.name(),
-                    dest.hostname(),
-                    dest.username(),
-                    options,
-                );
+                let mut data = DestinationData::new(dest.name(), dest.hostname(), dest.username(), options);
+                data.uuid = uuid;
+                window.imp().destinations_page.store().update(data);
             }
         ));
         dialog.present(Some(self));

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-10 15:49+0000\n"
+"POT-Creation-Date: 2026-07-10 20:36+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -21,7 +21,7 @@ msgstr ""
 
 #: data/de.f1ori.longlens.desktop.in.in:2
 msgid "@APP_NAME@"
-msgstr ""
+msgstr "@APP_NAME@"
 
 #: data/de.f1ori.longlens.desktop.in.in:8
 msgid "RDP;Remote;Desktop;Client;GTK;Windows;Server;Connection"
@@ -37,7 +37,7 @@ msgid "Connection Options"
 msgstr "Verbindungsoptionen"
 
 #: data/ui/connection_options_dialog.blp:14 data/ui/destination_dialog.blp:14
-#: data/ui/password_dialog.blp:14 src/rdp/mod.rs:806 src/window.rs:297
+#: data/ui/password_dialog.blp:14 src/rdp/widget.rs:359 src/window.rs:312
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -74,7 +74,8 @@ msgid ""
 "layouts, but shortcuts may stop working."
 msgstr ""
 "Zeichen statt physischer Tastencodes senden. Nützlich bei unterschiedlichen "
-"Tastaturbelegungen, aber Tastenkombinationen funktionieren möglicherweise nicht mehr."
+"Tastaturbelegungen, aber Tastenkombinationen funktionieren möglicherweise "
+"nicht mehr."
 
 #: data/ui/connection_options_dialog.blp:46
 msgid "Inhibit System Shortcuts"
@@ -88,7 +89,7 @@ msgstr ""
 
 #. Translators: Big label button to create the first destination if none exists
 #: data/ui/destination_dialog.blp:5 data/ui/window.blp:65
-#: src/destination_dialog.rs:222
+#: src/destination_dialog.rs:225
 msgid "Add Destination"
 msgstr "Ziel hinzufügen"
 
@@ -148,8 +149,8 @@ msgstr "Löschen"
 msgid "Leave fullscreen"
 msgstr "Vollbild verlassen"
 
-#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:70 src/window.rs:104
-#: src/window.rs:442
+#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:71 src/window.rs:98
+#: src/window.rs:450
 msgid "Close"
 msgstr "Schließen"
 
@@ -187,7 +188,7 @@ msgstr "Dunkler Stil"
 msgid "Long Lens"
 msgstr "Long Lens"
 
-#: data/ui/window.blp:14 src/window.rs:298
+#: data/ui/window.blp:14 src/window.rs:313
 msgid "Disconnect"
 msgstr "Trennen"
 
@@ -223,15 +224,20 @@ msgstr "_Neues Fenster"
 msgid "_About Long Lens"
 msgstr "_Über Long Lens"
 
-#: src/destination_dialog.rs:220
+#. Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
+#: src/about_dialog.rs:38
+msgid "translator-credits"
+msgstr "Florian Richter <florian@richter-es.de>"
+
+#: src/destination_dialog.rs:223
 msgid "Edit Destination"
 msgstr "Ziel bearbeiten"
 
-#: src/destinations_page.rs:69 src/window.rs:103
+#: src/destinations_page.rs:70 src/window.rs:97
 msgid "Connection error"
 msgstr "Verbindungsfehler"
 
-#: src/rdp/mod.rs:464
+#: src/rdp/errors.rs:28
 msgid ""
 "The username or password is incorrect. Please check your credentials and try "
 "again."
@@ -239,7 +245,7 @@ msgstr ""
 "Benutzername oder Passwort ist falsch. Bitte überprüfen Sie Ihre "
 "Anmeldedaten und versuchen Sie es erneut."
 
-#: src/rdp/mod.rs:467
+#: src/rdp/errors.rs:31
 msgid ""
 "Access was denied. The username or password may be incorrect, or this "
 "account is not allowed to connect."
@@ -247,71 +253,71 @@ msgstr ""
 "Zugriff verweigert. Benutzername oder Passwort ist möglicherweise falsch "
 "oder dieses Konto darf keine Verbindung herstellen."
 
-#: src/rdp/mod.rs:479
+#: src/rdp/errors.rs:43
 msgid "Could not connect to the server."
 msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
-#: src/rdp/mod.rs:580
+#: src/rdp/widget.rs:140
 msgid "Could not initialize FreeRDP."
 msgstr "FreeRDP konnte nicht initialisiert werden."
 
-#: src/rdp/mod.rs:754
+#: src/rdp/widget.rs:307
 msgid "The server certificate has changed"
 msgstr "Das Serverzertifikat hat sich geändert"
 
-#: src/rdp/mod.rs:756
+#: src/rdp/widget.rs:309
 msgid "Untrusted server certificate"
 msgstr "Nicht vertrauenswürdiges Serverzertifikat"
 
-#: src/rdp/mod.rs:760
+#: src/rdp/widget.rs:313
 msgid "Server"
 msgstr "Server"
 
-#: src/rdp/mod.rs:763
+#: src/rdp/widget.rs:316
 msgid "Subject"
 msgstr "Inhaber"
 
-#: src/rdp/mod.rs:765
+#: src/rdp/widget.rs:318
 msgid "Issuer"
 msgstr "Aussteller"
 
-#: src/rdp/mod.rs:767
+#: src/rdp/widget.rs:320
 msgid "Fingerprint"
 msgstr "Fingerabdruck"
 
-#: src/rdp/mod.rs:773
+#: src/rdp/widget.rs:326
 msgid "Common name"
 msgstr "Allgemeiner Name"
 
-#: src/rdp/mod.rs:780
+#: src/rdp/widget.rs:333
 msgid "The certificate name does not match this server."
 msgstr "Der Zertifikatsname stimmt nicht mit diesem Server überein."
 
-#: src/rdp/mod.rs:786
+#: src/rdp/widget.rs:339
 msgid "Previous fingerprint"
 msgstr "Vorheriger Fingerabdruck"
 
-#: src/rdp/mod.rs:793
+#: src/rdp/widget.rs:346
 msgid "Previous subject"
 msgstr "Vorheriger Inhaber"
 
-#: src/rdp/mod.rs:800
+#: src/rdp/widget.rs:353
 msgid "Previous issuer"
 msgstr "Vorheriger Aussteller"
 
-#: src/rdp/mod.rs:807
+#: src/rdp/widget.rs:360
 msgid "Trust Once"
 msgstr "Einmal vertrauen"
 
-#: src/rdp/mod.rs:808
+#: src/rdp/widget.rs:361
 msgid "Trust and Remember"
 msgstr "Vertrauen und merken"
 
-#: src/window.rs:294
+#: src/window.rs:309
 msgid "Disconnect?"
 msgstr "Trennen?"
 
-#: src/window.rs:295
+#: src/window.rs:310
 msgid ""
 "You are currently connected to a remote session. Do you want to disconnect "
 "and close?"
@@ -319,19 +325,19 @@ msgstr ""
 "Sie sind derzeit mit einer Remote-Sitzung verbunden. Möchten Sie die "
 "Verbindung trennen und schließen?"
 
-#: src/window.rs:397
+#: src/window.rs:405
 msgid "RDP Files"
 msgstr "RDP-Dateien"
 
-#: src/window.rs:403
+#: src/window.rs:411
 msgid "Open .rdp File"
 msgstr ".rdp-Datei öffnen"
 
-#: src/window.rs:439
+#: src/window.rs:447
 msgid "Could not open .rdp file"
 msgstr ".rdp-Datei konnte nicht geöffnet werden"
 
-#: src/window.rs:440
+#: src/window.rs:448
 msgid "The file could not be read or contains no valid connection."
 msgstr ""
 "Die Datei konnte nicht gelesen werden oder enthält keine gültige Verbindung."

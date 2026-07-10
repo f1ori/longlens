@@ -31,11 +31,18 @@ The flatpak repository contains released versions and nightly development builds
 
 ## How to build
 
-Also can be built with GNOME Builder
+### GNOME builder
+
+Should work out of the box.
 
 ### VSCode and devcontainer
 
-FreeRDP 3.27.1 development libraries are required for system builds.
+All dependencies are included in the devcontainer.
+
+A few caveats when using the devcontainer:
+
+* localhost refers to the container, not your host system. With Podman, use hosts.containers.internal to reach the host.
+* File copy and paste may not work because the filesystem is not shared and the FileTransfer portal is not configured.
 
     meson setup builddir --prefix=/workspaces/longlens/builddir/install/ -Dprofile=development
     meson compile -C builddir

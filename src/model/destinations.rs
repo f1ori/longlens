@@ -79,6 +79,7 @@ impl Destinations {
         name: String,
         hostname: String,
         username: String,
+        clipboard_enabled: bool,
         sound_enabled: bool,
     ) -> Option<String> {
         let already_exists = self
@@ -89,7 +90,7 @@ impl Destinations {
         if already_exists {
             return None;
         }
-        let object = DestinationObject::new(name, hostname, username, sound_enabled);
+        let object = DestinationObject::new(name, hostname, username, clipboard_enabled, sound_enabled);
         let uuid = object.uuid();
         self.model.append(&object);
         self.save();
@@ -102,12 +103,14 @@ impl Destinations {
         name: String,
         hostname: String,
         username: String,
+        clipboard_enabled: bool,
         sound_enabled: bool,
     ) {
         if let Some((_, dest)) = self.find(uuid) {
             dest.set_name(name);
             dest.set_hostname(hostname);
             dest.set_username(username);
+            dest.set_clipboard_enabled(clipboard_enabled);
             dest.set_sound_enabled(sound_enabled);
             self.save();
         }

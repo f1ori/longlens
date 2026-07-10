@@ -1,6 +1,7 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
 data/de.f1ori.longlens.desktop.in.in
+data/ui/connection_options_dialog.blp
 data/ui/destination_dialog.blp
 data/ui/destination_row.blp
 data/ui/destinations_page.blp
@@ -8,6 +9,7 @@ data/ui/fullscreen_bar.blp
 data/ui/password_dialog.blp
 data/ui/theme_selector.blp
 data/ui/window.blp
+src/connection_options_dialog.rs
 src/destination_dialog.rs
 src/destinations_page.rs
 src/rdp/mod.rs

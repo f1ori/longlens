@@ -132,7 +132,7 @@ impl LlDestinationPage {
     }
 
     /// The shared destinations store that owns the model and persistence.
-    fn store(&self) -> Rc<Destinations> {
+    pub(crate) fn store(&self) -> Rc<Destinations> {
         self.imp()
             .destinations
             .get()
@@ -147,9 +147,10 @@ impl LlDestinationPage {
         name: String,
         hostname: String,
         username: String,
+        clipboard_enabled: bool,
         sound_enabled: bool,
     ) -> Option<String> {
-        self.store().add(name, hostname, username, sound_enabled)
+        self.store().add(name, hostname, username, clipboard_enabled, sound_enabled)
     }
 
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
@@ -175,7 +176,8 @@ impl LlDestinationPage {
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
                 dialog.imp().usernameentry.set_text(&destination_object.username());
-                dialog.imp().forwardsoundswitch.set_active(destination_object.sound_enabled());
+                dialog.set_clipboard_enabled(destination_object.clipboard_enabled());
+                dialog.set_sound_enabled(destination_object.sound_enabled());
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
                     #[weak]
@@ -183,11 +185,11 @@ impl LlDestinationPage {
                     #[strong]
                     store,
                     #[upgrade_or_default]
-                    move |name, hostname, username, password, remember, sound_enabled| {
+                    move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled| {
                         let uuid = destination_object.uuid();
                         // Updates the shared DestinationObject in place, so the
                         // bound row title/subtitle refresh automatically.
-                        store.update(&uuid, name, hostname, username, sound_enabled);
+                        store.update(&uuid, name, hostname, username, clipboard_enabled, sound_enabled);
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
                             uuid,
@@ -303,8 +305,8 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             #[upgrade_or_default]
-            move |name, hostname, username, password, remember, sound_enabled| {
-                if let Some(uuid) = page.add_destination(name, hostname, username, sound_enabled) {
+            move |name, hostname, username, password, remember, clipboard_enabled, sound_enabled| {
+                if let Some(uuid) = page.add_destination(name, hostname, username, clipboard_enabled, sound_enabled) {
                     if remember && !password.expose_secret().is_empty() {
                         glib::spawn_future_local(glib::clone!(
                             #[strong]

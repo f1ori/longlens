@@ -34,12 +34,18 @@ pub struct DestinationData {
     pub name: String,
     pub hostname: String,
     pub username: String,
+    #[serde(default = "default_clipboard_enabled")]
+    pub clipboard_enabled: bool,
     #[serde(default = "default_sound_enabled")]
     pub sound_enabled: bool,
 }
 
 fn new_uuid() -> String {
     Uuid::new_v4().to_string()
+}
+
+fn default_clipboard_enabled() -> bool {
+    true
 }
 
 fn default_sound_enabled() -> bool {
@@ -56,6 +62,7 @@ mod imp {
         #[property(name = "name", get, set, type = String, member = name)]
         #[property(name = "hostname", get, set, type = String, member = hostname)]
         #[property(name = "username", get, set, type = String, member = username)]
+        #[property(name = "clipboard-enabled", get, set, type = bool, member = clipboard_enabled)]
         #[property(name = "sound-enabled", get, set, type = bool, member = sound_enabled)]
         pub data: RefCell<DestinationData>,
         #[property(name = "display-title", get = Self::compute_display_title, type = String)]
@@ -112,12 +119,19 @@ glib::wrapper! {
 }
 
 impl DestinationObject {
-    pub fn new(name: String, hostname: String, username: String, sound_enabled: bool) -> Self {
+    pub fn new(
+        name: String,
+        hostname: String,
+        username: String,
+        clipboard_enabled: bool,
+        sound_enabled: bool,
+    ) -> Self {
         Object::builder()
             .property("uuid", Uuid::new_v4().to_string())
             .property("name", name)
             .property("hostname", hostname)
             .property("username", username)
+            .property("clipboard-enabled", clipboard_enabled)
             .property("sound-enabled", sound_enabled)
             .build()
     }
@@ -132,6 +146,7 @@ impl DestinationObject {
             .property("name", &data.name)
             .property("hostname", &data.hostname)
             .property("username", &data.username)
+            .property("clipboard-enabled", data.clipboard_enabled)
             .property("sound-enabled", data.sound_enabled)
             .build()
     }

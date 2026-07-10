@@ -2,6 +2,7 @@ blueprint_compiler = find_program('blueprint-compiler')
 
 blueprints = []
 foreach name : [
+  'connection_options_dialog',
   'destination_dialog',
   'destination_row',
   'destinations_page',

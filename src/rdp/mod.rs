@@ -497,6 +497,7 @@ mod imp {
         last_remote_clipboard: RefCell<Option<String>>,
         pub(super) pending_file_contents: RefCell<HashMap<u32, async_channel::Sender<Vec<u8>>>>,
         suppress_next_clipboard_announce: Cell<bool>,
+        pub(super) clipboard_enabled: Cell<bool>,
         generation: Cell<u64>,
         pointer_x: Cell<u16>,
         pointer_y: Cell<u16>,
@@ -538,6 +539,7 @@ mod imp {
             password: secrecy::SecretString,
             width: u16,
             height: u16,
+            clipboard_enabled: bool,
             sound_enabled: bool,
         ) {
             let Some((width, height, desktop_scale)) =
@@ -555,6 +557,7 @@ mod imp {
             let generation = self.generation.get().wrapping_add(1);
             self.generation.set(generation);
             self.connection_scale.set(self.surface_scale());
+            self.clipboard_enabled.set(clipboard_enabled);
             self.obj().set_state(RdpState::Connecting);
 
             let config = config::build_config(
@@ -677,17 +680,25 @@ mod imp {
                         .set_cursor(gdk::Cursor::from_name("default", None).as_ref());
                 }
                 SessionEvent::ClipboardRemoteTextAvailable => {
+                    if !self.clipboard_enabled.get() {
+                        return;
+                    }
                     if let Some(session) = self.session.borrow().as_ref() {
                         session.request_clipboard_text();
                     }
                 }
                 SessionEvent::ClipboardRemoteFilesAvailable => {
+                    if !self.clipboard_enabled.get() {
+                        return;
+                    }
                     if let Some(session) = self.session.borrow().as_ref() {
                         session.request_clipboard_files();
                     }
                 }
                 SessionEvent::ClipboardRemoteFiles(files) => {
-                    self.set_remote_file_transfer_portal(files);
+                    if self.clipboard_enabled.get() {
+                        self.set_remote_file_transfer_portal(files);
+                    }
                 }
                 SessionEvent::ClipboardRemoteFileContents { stream_id, data } => {
                     if let Some(sender) = self.pending_file_contents.borrow_mut().remove(&stream_id)
@@ -696,6 +707,9 @@ mod imp {
                     }
                 }
                 SessionEvent::ClipboardText(text) => {
+                    if !self.clipboard_enabled.get() {
+                        return;
+                    }
                     info!(chars = text.chars().count(), "Setting local clipboard from remote text");
                     *self.last_remote_clipboard.borrow_mut() = Some(text.clone());
                     self.obj().display().clipboard().set_text(&text);
@@ -889,8 +903,8 @@ mod imp {
             self.obj().add_controller(controller);
         }
 
-        fn announce_local_clipboard(&self) {
-            if self.state.get() != RdpState::Connected {
+        pub(super) fn announce_local_clipboard(&self) {
+            if self.state.get() != RdpState::Connected || !self.clipboard_enabled.get() {
                 return;
             }
             let clipboard = self.obj().display().clipboard();
@@ -1077,14 +1091,31 @@ impl RdpWidget {
         password: secrecy::SecretString,
         width: u16,
         height: u16,
+        clipboard_enabled: bool,
         sound_enabled: bool,
     ) {
-        self.imp()
-            .connect_to_server(hostname, port, username, password, width, height, sound_enabled);
+        self.imp().connect_to_server(
+            hostname,
+            port,
+            username,
+            password,
+            width,
+            height,
+            clipboard_enabled,
+            sound_enabled,
+        );
     }
 
     pub fn disconnect(&self) {
         self.imp().disconnect();
+    }
+
+    pub fn set_clipboard_enabled(&self, enabled: bool) {
+        let imp = self.imp();
+        imp.clipboard_enabled.set(enabled);
+        if enabled {
+            imp.announce_local_clipboard();
+        }
     }
 
     pub fn send_key(&self, keycode: u16, pressed: bool) {

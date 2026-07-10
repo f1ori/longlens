@@ -26,6 +26,7 @@ use secrecy::SecretString;
 
 use std::cell::RefCell;
 
+use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
 use crate::model::destination_object::DestinationObject;
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
@@ -76,10 +77,13 @@ mod imp {
         #[template_child]
         pub fullscreenbutton: TemplateChild<gtk::Button>,
         #[template_child]
+        pub connectionoptionsbutton: TemplateChild<gtk::Button>,
+        #[template_child]
         pub fullscreen_bar: TemplateChild<LlFullscreenBar>,
         #[template_child]
         pub rdpwidget: TemplateChild<RdpWidget>,
         pub connection_display_title: RefCell<String>,
+        pub connection_destination_uuid: RefCell<Option<String>>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -103,6 +107,11 @@ mod imp {
         #[template_callback]
         fn handle_fullscreenbutton_clicked(&self, _button: &gtk::Button) {
             self.obj().fullscreen();
+        }
+
+        #[template_callback]
+        fn handle_connectionoptionsbutton_clicked(&self, _button: &gtk::Button) {
+            self.obj().show_connection_options_dialog();
         }
 
         /// Installs a capture-phase key controller on the window that forwards
@@ -187,6 +196,14 @@ mod imp {
                 })
                 .sync_create()
                 .build();
+            self.rdpwidget
+                .bind_property::<gtk::Button>("state", self.connectionoptionsbutton.as_ref(), "visible")
+                .transform_to(|_binding, value: glib::Value| {
+                    let state = value.get::<RdpState>().unwrap_or_default();
+                    Some(state == RdpState::Connected)
+                })
+                .sync_create()
+                .build();
             self.obj()
                 .bind_property::<LlFullscreenBar>("title", self.fullscreen_bar.as_ref(), "title")
                 .sync_create()
@@ -221,6 +238,7 @@ mod imp {
                         obj.set_title(Some(&display_title));
                         crate::utils::set_shortcuts_inhibited(&*obj, state == RdpState::Connected);
                     } else {
+                        window.connection_destination_uuid.borrow_mut().take();
                         obj.set_title(Some(&gettext("Long Lens")));
                         crate::utils::set_shortcuts_inhibited(&*obj, false);
                         if obj.is_fullscreen() {
@@ -322,6 +340,7 @@ impl LongLensWindow {
                 let hostname = dest.hostname();
                 let username = dest.username();
                 let display_title = dest.property::<String>("display-title");
+                let clipboard_enabled = dest.clipboard_enabled();
                 let sound_enabled = dest.sound_enabled();
                 glib::spawn_future_local(glib::clone!(
                     #[weak]
@@ -329,7 +348,7 @@ impl LongLensWindow {
                     async move {
                         match crate::secrets::get_password(&uuid).await {
                             Some(password) => {
-                                window.start_connection(hostname, username, password, display_title, sound_enabled);
+                                window.start_connection(uuid, hostname, username, password, display_title, clipboard_enabled, sound_enabled);
                             }
                             None => {
                                 let dialog = LongLensPasswordDialog::new();
@@ -339,7 +358,7 @@ impl LongLensWindow {
                                     #[weak]
                                     window,
                                     move |password| {
-                                        window.start_connection(hostname.clone(), username.clone(), password, display_title.clone(), sound_enabled);
+                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), clipboard_enabled, sound_enabled);
                                     }
                                 ));
                                 dialog.present(Some(&window));
@@ -402,14 +421,56 @@ impl LongLensWindow {
         dialog.present(Some(self));
     }
 
+    fn show_connection_options_dialog(&self) {
+        let Some(uuid) = self.imp().connection_destination_uuid.borrow().clone() else {
+            return;
+        };
+        let destinations = self.imp().destinations_page.destinations();
+        let Some(dest) = destinations
+            .iter::<DestinationObject>()
+            .filter_map(|r| r.ok())
+            .find(|d| d.uuid() == uuid)
+        else {
+            return;
+        };
+
+        let dialog = LongLensConnectionOptionsDialog::new();
+        dialog.set_clipboard_enabled(dest.clipboard_enabled());
+        dialog.set_sound_enabled(dest.sound_enabled());
+        dialog.set_on_save(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            dest,
+            move |clipboard_enabled, sound_enabled| {
+                let uuid = dest.uuid();
+                dest.set_clipboard_enabled(clipboard_enabled);
+                dest.set_sound_enabled(sound_enabled);
+                window.imp().rdpwidget.set_clipboard_enabled(clipboard_enabled);
+                window.imp().destinations_page.store().update(
+                    &uuid,
+                    dest.name(),
+                    dest.hostname(),
+                    dest.username(),
+                    clipboard_enabled,
+                    sound_enabled,
+                );
+            }
+        ));
+        dialog.present(Some(self));
+    }
+
     fn start_connection(
         &self,
+        uuid: String,
         hostname: String,
         username: String,
         password: SecretString,
         display_title: String,
+        clipboard_enabled: bool,
         sound_enabled: bool,
     ) {
+        *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
         *self.imp().connection_display_title.borrow_mut() = display_title;
         let (server, port) = parse_domain_port(&hostname);
         let w = self.imp().stack.width();
@@ -417,6 +478,6 @@ impl LongLensWindow {
         let width = if w > 0 { w as u16 } else { 1280 };
         let height = if h > 0 { h as u16 } else { 800 };
         self.imp().rdpwidget
-            .connect_to_server(server, port, username, password, width, height, sound_enabled);
+            .connect_to_server(server, port, username, password, width, height, clipboard_enabled, sound_enabled);
     }
 }

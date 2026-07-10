@@ -32,6 +32,14 @@ template $LongLensWindow: Adw.ApplicationWindow {
       }
 
       [end]
+      Button connectionoptionsbutton {
+        icon-name: "preferences-system-symbolic";
+        tooltip-text: _("Connection Options");
+        visible: false;
+        clicked => $handle_connectionoptionsbutton_clicked() swapped;
+      }
+
+      [end]
       Button fullscreenbutton {
         icon-name: "view-fullscreen-symbolic";
         tooltip-text: _("Fullscreen");

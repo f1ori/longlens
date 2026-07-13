@@ -26,6 +26,7 @@ mod config;
 mod errors;
 pub(crate) mod ffi;
 mod input;
+mod key_handler;
 mod portal_transfer;
 mod render;
 mod session;

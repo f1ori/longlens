@@ -31,6 +31,7 @@ use crate::model::destination_object::ConnectionOptions;
 
 use super::clipboard::Clipboard;
 use super::errors::friendly_connection_error;
+use super::key_handler::{KeyHandler, RemoteKeySender};
 use super::session::{CertificateDecision, CertificateDetails, Session, SessionEvent};
 use super::{config, input, render};
 
@@ -59,8 +60,8 @@ mod imp {
         disconnect_timeout: RefCell<Option<glib::SourceId>>,
         pending_certificate: RefCell<Option<mpsc::SyncSender<CertificateDecision>>>,
         pub(in crate::rdp) clipboard: Clipboard,
-        pub(super) forward_unicode: Cell<bool>,
         pub(super) inhibit_system_shortcuts: Cell<bool>,
+        pub(super) key_handler: RefCell<KeyHandler>,
         generation: Cell<u64>,
         pointer_x: Cell<u16>,
         pointer_y: Cell<u16>,
@@ -416,28 +417,51 @@ mod imp {
             ));
         }
 
-        pub fn send_key(&self, keycode: u16, pressed: bool) {
-            if self.state.get() != RdpState::Connected {
-                return;
+        fn handle_key_pressed(
+            &self,
+            keyval: gtk::gdk::Key,
+            keycode: u32,
+            state: gtk::gdk::ModifierType,
+        ) -> glib::Propagation {
+            if !self.obj().has_focus() {
+                return glib::Propagation::Proceed;
             }
-            if let (Some(scancode), Some(session)) = (
-                input::key_scancode(keycode),
-                self.session.borrow().as_ref(),
-            ) {
-                session.send_key(scancode, pressed);
-            }
+
+            let mut sender = WidgetRemoteKeySender { imp: self };
+            self.key_handler
+                .borrow_mut()
+                .handle_key_pressed(keyval, keycode, state, &mut sender)
         }
 
-        pub fn send_unicode_char(&self, ch: char, pressed: bool) {
-            if self.state.get() != RdpState::Connected {
+        fn handle_key_released(&self, keycode: u32) {
+            if !self.obj().has_focus() {
                 return;
             }
-            if let Some(session) = self.session.borrow().as_ref() {
-                let mut buffer = [0; 2];
-                for code in ch.encode_utf16(&mut buffer) {
-                    session.send_unicode(*code, pressed);
+
+            let mut sender = WidgetRemoteKeySender { imp: self };
+            self.key_handler
+                .borrow_mut()
+                .handle_key_released(keycode, &mut sender);
+        }
+
+        pub(super) fn register_key_controller_on(&self, widget: &impl IsA<gtk::Widget>) {
+            let controller = gtk::EventControllerKey::new();
+            controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+            controller.connect_key_pressed(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                #[upgrade_or]
+                glib::Propagation::Proceed,
+                move |_controller, keyval, keycode, state| {
+                    imp.handle_key_pressed(keyval, keycode, state)
                 }
-            }
+            ));
+            controller.connect_key_released(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                move |_controller, _keyval, keycode, _state| imp.handle_key_released(keycode)
+            ));
+            widget.add_controller(controller);
         }
 
         fn send_mouse(&self, flags: u16, x: f64, y: f64) {
@@ -547,6 +571,36 @@ mod imp {
         }
     }
 
+    struct WidgetRemoteKeySender<'a> {
+        imp: &'a RdpWidget,
+    }
+
+    impl RemoteKeySender for WidgetRemoteKeySender<'_> {
+        fn send_key(&mut self, keycode: u16, pressed: bool) {
+            if self.imp.state.get() != RdpState::Connected {
+                return;
+            }
+            if let (Some(scancode), Some(session)) = (
+                input::key_scancode(keycode),
+                self.imp.session.borrow().as_ref(),
+            ) {
+                session.send_key(scancode, pressed);
+            }
+        }
+
+        fn send_unicode_char(&mut self, ch: char, pressed: bool) {
+            if self.imp.state.get() != RdpState::Connected {
+                return;
+            }
+            if let Some(session) = self.imp.session.borrow().as_ref() {
+                let mut buffer = [0; 2];
+                for code in ch.encode_utf16(&mut buffer) {
+                    session.send_unicode(*code, pressed);
+                }
+            }
+        }
+    }
+
     #[glib::derived_properties]
     impl ObjectImpl for RdpWidget {
         fn constructed(&self) {
@@ -634,6 +688,10 @@ impl RdpWidget {
         self.imp().queue_resize_to_logical_size(width, height);
     }
 
+    pub fn register_key_controller_on(&self, widget: &impl IsA<gtk::Widget>) {
+        self.imp().register_key_controller_on(widget);
+    }
+
     pub fn set_clipboard_enabled(&self, enabled: bool) {
         let imp = self.imp();
         imp.clipboard.set_enabled(enabled);
@@ -647,23 +705,19 @@ impl RdpWidget {
     }
 
     pub fn set_forward_unicode(&self, enabled: bool) {
-        self.imp().forward_unicode.set(enabled);
+        self.imp()
+            .key_handler
+            .borrow_mut()
+            .set_forward_unicode(enabled);
     }
 
     pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
-        self.imp().inhibit_system_shortcuts.set(enabled);
+        let imp = self.imp();
+        imp.inhibit_system_shortcuts.set(enabled);
+        imp.key_handler
+            .borrow_mut()
+            .set_inhibit_system_shortcuts(enabled);
         crate::utils::set_shortcuts_inhibited(self, self.state() == RdpState::Connected && enabled);
     }
 
-    pub fn send_key(&self, keycode: u16, pressed: bool) {
-        self.imp().send_key(keycode, pressed);
-    }
-
-    pub fn send_unicode_char(&self, ch: char, pressed: bool) {
-        self.imp().send_unicode_char(ch, pressed);
-    }
-
-    pub fn forward_unicode(&self) -> bool {
-        self.imp().forward_unicode.get()
-    }
 }

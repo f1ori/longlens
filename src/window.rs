@@ -26,7 +26,6 @@ use secrecy::SecretString;
 use tracing::warn;
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
 use crate::model::destination_object::{ConnectionOptions, DestinationData};
@@ -76,8 +75,6 @@ mod imp {
         pub rdpwidget: TemplateChild<RdpWidget>,
         pub connection_display_title: RefCell<String>,
         pub connection_destination_uuid: RefCell<Option<String>>,
-        pub unicode_keys: RefCell<HashMap<u16, char>>,
-        pub shortcut_modifier_keys: RefCell<HashSet<u16>>,
         pub inhibit_system_shortcuts: Cell<bool>,
     }
     #[gtk::template_callbacks]
@@ -109,79 +106,6 @@ mod imp {
             self.obj().show_connection_options_dialog();
         }
 
-        /// Installs a capture-phase key controller on the window that forwards
-        /// every key to the RDP widget while its surface holds the focus.
-        ///
-        /// Running in the capture phase on the toplevel lets it preempt GTK's
-        /// own keyboard handling — accelerators, mnemonics and the F10 primary
-        /// menu — which would otherwise swallow keys like F10 before they could
-        /// reach the remote session. Gating on the RDP widget's focus keeps the
-        /// local UI fully keyboard-navigable whenever the pointer leaves the
-        /// remote surface (which drops its focus).
-        fn setup_key_grab(&self) {
-            let controller = gtk::EventControllerKey::new();
-            controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-            controller.connect_key_pressed(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                #[upgrade_or]
-                glib::Propagation::Proceed,
-                move |_controller, keyval, keycode, _state| {
-                    if !window.rdpwidget.has_focus() {
-                        return glib::Propagation::Proceed;
-                    }
-                    let keycode = keycode as u16;
-                    let shortcut_modifier = matches!(
-                        keyval,
-                        gtk::gdk::Key::Control_L
-                            | gtk::gdk::Key::Control_R
-                            | gtk::gdk::Key::Alt_L
-                            | gtk::gdk::Key::Alt_R
-                            | gtk::gdk::Key::Super_L
-                            | gtk::gdk::Key::Super_R
-                            | gtk::gdk::Key::Hyper_L
-                            | gtk::gdk::Key::Hyper_R
-                            | gtk::gdk::Key::Meta_L
-                            | gtk::gdk::Key::Meta_R
-                    );
-                    if shortcut_modifier {
-                        window.shortcut_modifier_keys.borrow_mut().insert(keycode);
-                    }
-                    let shortcut_modifier_active = !window.shortcut_modifier_keys.borrow().is_empty();
-                    let unicode_char = window
-                        .rdpwidget
-                        .forward_unicode()
-                        .then(|| keyval.to_unicode())
-                        .flatten()
-                        .filter(|ch| !ch.is_control())
-                        .filter(|_| !shortcut_modifier_active);
-                    if let Some(ch) = unicode_char {
-                        window.unicode_keys.borrow_mut().insert(keycode, ch);
-                        window.rdpwidget.send_unicode_char(ch, true);
-                    } else {
-                        window.unicode_keys.borrow_mut().remove(&keycode);
-                        window.rdpwidget.send_key(keycode, true);
-                    }
-                    glib::Propagation::Stop
-                }
-            ));
-            controller.connect_key_released(glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |_controller, _keyval, keycode, _state| {
-                    if window.rdpwidget.has_focus() {
-                        let keycode = keycode as u16;
-                        if let Some(ch) = window.unicode_keys.borrow_mut().remove(&keycode) {
-                            window.rdpwidget.send_unicode_char(ch, false);
-                        } else {
-                            window.rdpwidget.send_key(keycode, false);
-                        }
-                        window.shortcut_modifier_keys.borrow_mut().remove(&keycode);
-                    }
-                }
-            ));
-            self.obj().add_controller(controller);
-        }
     }
 
     #[glib::object_subclass]
@@ -327,7 +251,7 @@ mod imp {
             ));
             self.obj().setup_actions();
             self.obj().populate_menu();
-            self.setup_key_grab();
+            self.rdpwidget.register_key_controller_on(&*self.obj());
         }
     }
     impl WidgetImpl for LongLensWindow {}

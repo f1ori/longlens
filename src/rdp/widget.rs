@@ -60,7 +60,6 @@ mod imp {
         disconnect_timeout: RefCell<Option<glib::SourceId>>,
         pending_certificate: RefCell<Option<mpsc::SyncSender<CertificateDecision>>>,
         pub(in crate::rdp) clipboard: Clipboard,
-        pub(super) inhibit_system_shortcuts: Cell<bool>,
         pub(super) key_handler: RefCell<KeyHandler>,
         generation: Cell<u64>,
         pointer_x: Cell<u16>,
@@ -417,6 +416,14 @@ mod imp {
             ));
         }
 
+        pub(super) fn update_system_shortcut_inhibition(&self) {
+            let obj = self.obj();
+            self.key_handler.borrow().update_system_shortcut_inhibition(
+                &*obj,
+                self.state.get() == RdpState::Connected && obj.has_focus(),
+            );
+        }
+
         fn handle_key_pressed(
             &self,
             keyval: gtk::gdk::Key,
@@ -493,7 +500,7 @@ mod imp {
                         let obj = imp.obj();
                         obj.grab_focus();
                         imp.announce_local_clipboard();
-                        crate::utils::set_shortcuts_inhibited(&*obj, imp.inhibit_system_shortcuts.get());
+                        imp.update_system_shortcut_inhibition();
                     }
                 }
             ));
@@ -502,7 +509,9 @@ mod imp {
                 self,
                 move |_controller| {
                     let obj = imp.obj();
-                    crate::utils::set_shortcuts_inhibited(&*obj, false);
+                    imp.key_handler
+                        .borrow()
+                        .update_system_shortcut_inhibition(&*obj, false);
                     if let Some(root) = obj.root() {
                         root.set_focus(None::<&gtk::Widget>);
                     }
@@ -609,6 +618,16 @@ mod imp {
             self.setup_input_controller();
             self.setup_clipboard();
             self.obj().set_focusable(true);
+            self.obj().connect_state_notify(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                move |_| imp.update_system_shortcut_inhibition()
+            ));
+            self.obj().connect_has_focus_notify(glib::clone!(
+                #[weak(rename_to = imp)]
+                self,
+                move |_| imp.update_system_shortcut_inhibition()
+            ));
         }
 
         fn signals() -> &'static [Signal] {
@@ -713,11 +732,10 @@ impl RdpWidget {
 
     pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
         let imp = self.imp();
-        imp.inhibit_system_shortcuts.set(enabled);
         imp.key_handler
             .borrow_mut()
             .set_inhibit_system_shortcuts(enabled);
-        crate::utils::set_shortcuts_inhibited(self, self.state() == RdpState::Connected && enabled);
+        imp.update_system_shortcut_inhibition();
     }
 
 }

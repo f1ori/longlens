@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::glib;
+use gtk::{glib, prelude::*};
 use std::collections::{HashMap, HashSet};
 
 pub(super) trait RemoteKeySender {
@@ -42,6 +42,14 @@ impl KeyHandler {
 
     pub(super) fn set_inhibit_system_shortcuts(&mut self, enabled: bool) {
         self.inhibit_system_shortcuts = enabled;
+    }
+
+    pub(super) fn update_system_shortcut_inhibition(
+        &self,
+        widget: &impl IsA<gtk::Widget>,
+        active: bool,
+    ) {
+        crate::utils::set_shortcuts_inhibited(widget, active && self.inhibit_system_shortcuts);
     }
 
     pub(super) fn handle_key_pressed(

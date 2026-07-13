@@ -25,7 +25,7 @@ use gtk::{gio, glib};
 use secrecy::SecretString;
 use tracing::warn;
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
 use crate::model::destination_object::{ConnectionOptions, DestinationData};
@@ -75,7 +75,6 @@ mod imp {
         pub rdpwidget: TemplateChild<RdpWidget>,
         pub connection_display_title: RefCell<String>,
         pub connection_destination_uuid: RefCell<Option<String>>,
-        pub inhibit_system_shortcuts: Cell<bool>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
@@ -195,14 +194,9 @@ mod imp {
                     if state == RdpState::Connected || state == RdpState::Connecting {
                         let display_title = window.connection_display_title.borrow().clone();
                         obj.set_title(Some(&display_title));
-                        crate::utils::set_shortcuts_inhibited(
-                            &*obj,
-                            state == RdpState::Connected && window.inhibit_system_shortcuts.get(),
-                        );
                     } else {
                         window.connection_destination_uuid.borrow_mut().take();
                         obj.set_title(Some(&gettext("Long Lens")));
-                        crate::utils::set_shortcuts_inhibited(&*obj, false);
                         if obj.is_fullscreen() {
                             obj.unfullscreen();
                         }
@@ -436,9 +430,6 @@ impl LongLensWindow {
     }
 
     fn apply_runtime_connection_options(&self, options: ConnectionOptions) {
-        self.imp()
-            .inhibit_system_shortcuts
-            .set(options.inhibit_system_shortcuts);
         self.imp()
             .rdpwidget
             .set_clipboard_enabled(options.clipboard_enabled);

@@ -22,18 +22,15 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib};
-use secrecy::SecretString;
-use tracing::warn;
+use std::cell::OnceCell;
+use std::rc::Rc;
 
-use std::cell::RefCell;
-
+use crate::connection_controller::ConnectionController;
 use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
-use crate::model::destination_object::{ConnectionOptions, DestinationData};
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
 use crate::destinations_page::LlDestinationPage;
 use crate::fullscreen_bar::LlFullscreenBar;
-use crate::password_dialog::LongLensPasswordDialog;
 
 fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
     if state == RdpState::Connected {
@@ -73,14 +70,13 @@ mod imp {
         pub fullscreen_bar: TemplateChild<LlFullscreenBar>,
         #[template_child]
         pub rdpwidget: TemplateChild<RdpWidget>,
-        pub connection_display_title: RefCell<String>,
-        pub connection_destination_uuid: RefCell<Option<String>>,
+        pub connection_controller: OnceCell<Rc<ConnectionController>>,
     }
     #[gtk::template_callbacks]
     impl LongLensWindow {
         #[template_callback]
         fn handle_disconnectbutton_clicked(&self, _button: &gtk::Button) {
-            self.rdpwidget.disconnect();
+            self.obj().connection_controller().disconnect();
         }
 
         #[template_callback]
@@ -192,10 +188,13 @@ mod imp {
                         widget.queue_resize_to_logical_size(window.stack.width(), window.stack.height());
                     }
                     if state == RdpState::Connected || state == RdpState::Connecting {
-                        let display_title = window.connection_display_title.borrow().clone();
+                        let display_title = obj
+                            .connection_controller()
+                            .current_display_title()
+                            .unwrap_or_else(|| gettext("Long Lens"));
                         obj.set_title(Some(&display_title));
                     } else {
-                        window.connection_destination_uuid.borrow_mut().take();
+                        obj.connection_controller().clear_current();
                         obj.set_title(Some(&gettext("Long Lens")));
                         if obj.is_fullscreen() {
                             obj.unfullscreen();
@@ -243,6 +242,12 @@ mod imp {
                     window.stack.set_visible_child_name(stack_page(state, model.n_items()));
                 }
             ));
+            self.connection_controller
+                .set(ConnectionController::new(
+                    self.destinations_page.destinations_store(),
+                    &self.rdpwidget,
+                ))
+                .expect("Could not set connection controller");
             self.obj().setup_actions();
             self.obj().populate_menu();
             self.rdpwidget.register_key_controller_on(&*self.obj());
@@ -315,38 +320,10 @@ impl LongLensWindow {
             .parameter_type(Some(glib::VariantTy::new("s").unwrap()))
             .activate(move |window: &Self, _action, parameter| {
                 let uuid: String = parameter.unwrap().get().unwrap();
-                let destinations = window.imp().destinations_page.destinations_store();
-                let Some(dest) = destinations.get(&uuid) else {
-                    return;
-                };
-                let display_title = dest.display_title();
-                let options = dest.connection_options();
-                let hostname = dest.hostname;
-                let username = dest.username;
-                glib::spawn_future_local(glib::clone!(
-                    #[weak]
-                    window,
-                    async move {
-                        match crate::secrets::get_password(&uuid).await {
-                            Some(password) => {
-                                window.start_connection(uuid, hostname, username, password, display_title, options);
-                            }
-                            None => {
-                                let dialog = LongLensPasswordDialog::new();
-                                dialog.set_hostname(&hostname);
-                                dialog.set_username(&username);
-                                dialog.set_on_connect(glib::clone!(
-                                    #[weak]
-                                    window,
-                                    move |password| {
-                                        window.start_connection(uuid.clone(), hostname.clone(), username.clone(), password, display_title.clone(), options);
-                                    }
-                                ));
-                                dialog.present(Some(&window));
-                            }
-                        }
-                    }
-                ));
+                let (width, height) = window.initial_rdp_size();
+                window
+                    .connection_controller()
+                    .connect_by_uuid(window, uuid, width, height);
             })
             .build();
 
@@ -403,53 +380,32 @@ impl LongLensWindow {
     }
 
     fn show_connection_options_dialog(&self) {
-        let Some(uuid) = self.imp().connection_destination_uuid.borrow().clone() else {
-            return;
-        };
-        let destinations = self.imp().destinations_page.destinations_store();
-        let Some(dest) = destinations.get(&uuid) else {
+        let controller = self.connection_controller();
+        let Some(dest) = controller.current_destination() else {
             return;
         };
 
         let dialog = LongLensConnectionOptionsDialog::new();
         dialog.set_connection_options(dest.connection_options());
-        dialog.set_on_save(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |options| {
-                let uuid = dest.uuid.clone();
-                window.apply_runtime_connection_options(options);
-                let mut data = DestinationData::new(dest.name.clone(), dest.hostname.clone(), dest.username.clone(), options);
-                data.uuid = uuid;
-                if let Err(error) = window.imp().destinations_page.destinations_store().update(data) {
-                    warn!(?error, "Could not update connection options");
-                }
-            }
-        ));
+        dialog.set_on_save(move |options| {
+            controller.apply_runtime_connection_options(options);
+        });
         dialog.present(Some(self));
     }
 
-    fn apply_runtime_connection_options(&self, options: ConnectionOptions) {
-        self.imp().rdpwidget.set_connection_options(options);
+    fn connection_controller(&self) -> Rc<ConnectionController> {
+        self.imp()
+            .connection_controller
+            .get()
+            .expect("connection controller should be set")
+            .clone()
     }
 
-    fn start_connection(
-        &self,
-        uuid: String,
-        hostname: String,
-        username: String,
-        password: SecretString,
-        display_title: String,
-        options: ConnectionOptions,
-    ) {
-        *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
-        *self.imp().connection_display_title.borrow_mut() = display_title;
-        let (server, port) = crate::rdp::parse_hostname_port(&hostname);
+    fn initial_rdp_size(&self) -> (u16, u16) {
         let w = self.imp().stack.width();
         let h = self.imp().stack.height();
         let width = if w > 0 { w as u16 } else { 1280 };
         let height = if h > 0 { h as u16 } else { 800 };
-        self.imp().rdpwidget
-            .connect_to_server(server, port, username, password, width, height, options);
+        (width, height)
     }
 }

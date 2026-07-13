@@ -27,6 +27,7 @@ mod application;
 mod search_provider;
 mod secrets;
 mod config;
+mod connection_controller;
 mod connection_options_dialog;
 mod model;
 mod rdp_file;

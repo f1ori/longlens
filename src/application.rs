@@ -88,9 +88,8 @@ mod imp {
         }
 
         // We connect to the activate callback to create a window when the application
-        // has been launched. Additionally, this callback notifies us when the user
-        // tries to launch a "second instance" of the application. When they try
-        // to do that, we'll just present any existing window.
+        // has been launched. Launching another instance intentionally opens another
+        // window, so multiple connection windows can be active independently.
         fn activate(&self) {
             let application = self.obj();
 

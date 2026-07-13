@@ -27,7 +27,7 @@ impl DestinationFormData {
 mod imp {
     use super::*;
 
-    type SaveCallback = Box<dyn Fn(DestinationFormData) -> Option<String> + 'static>;
+    type SaveCallback = Box<dyn Fn(DestinationFormData, bool) + 'static>;
 
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destination_dialog.ui")]
@@ -119,7 +119,7 @@ mod imp {
         fn save_only(&self) {
             let form_data = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                on_save(form_data);
+                on_save(form_data, false);
             }
             self.obj().close();
         }
@@ -127,11 +127,7 @@ mod imp {
         fn handle_action(&self) {
             let form_data = self.form_values();
             if let Some(on_save) = self.on_save.borrow().as_ref() {
-                if let Some(uuid) = on_save(form_data) {
-                    self.obj()
-                        .activate_action("win.connect", Some(&uuid.to_variant()))
-                        .expect("win.connect action failed");
-                }
+                on_save(form_data, true);
             }
             self.obj().close();
         }
@@ -228,7 +224,7 @@ impl LongLensDestinationDialog {
 
     pub fn set_on_save(
         &self,
-        callback: impl Fn(DestinationFormData) -> Option<String> + 'static,
+        callback: impl Fn(DestinationFormData, bool) + 'static,
     ) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }

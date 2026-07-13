@@ -181,10 +181,12 @@ impl LlDestinationPage {
                 dialog.set_on_save(glib::clone!(
                     #[weak]
                     destination_object,
+                    #[weak]
+                    page,
                     #[strong]
                     store,
                     #[upgrade_or_default]
-                    move |form_data| {
+                    move |form_data, connect_after_save| {
                         let DestinationFormData {
                             name,
                             hostname,
@@ -200,6 +202,7 @@ impl LlDestinationPage {
                         data.uuid = uuid.clone();
                         if let Err(error) = store.update(data) {
                             warn!(?error, "Could not update destination");
+                            return;
                         }
                         glib::spawn_future_local(glib::clone!(
                             #[strong]
@@ -212,7 +215,10 @@ impl LlDestinationPage {
                                 }
                             }
                         ));
-                        Some(uuid)
+                        if connect_after_save {
+                            page.activate_action("win.connect", Some(&uuid.to_variant()))
+                                .expect("win.connect action failed");
+                        }
                     }
                 ));
                 dialog.set_on_delete(glib::clone!(
@@ -322,7 +328,7 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             #[upgrade_or_default]
-            move |form_data| {
+            move |form_data, connect_after_save| {
                 let DestinationFormData {
                     name,
                     hostname,
@@ -331,19 +337,21 @@ impl LlDestinationPage {
                     remember_password,
                     options,
                 } = form_data;
-                if let Some(uuid) = page.add_destination(DestinationData::new(name, hostname, username, options)) {
-                    if remember_password && !password.expose_secret().is_empty() {
-                        glib::spawn_future_local(glib::clone!(
-                            #[strong]
-                            uuid,
-                            async move {
-                                secrets::store_password(&uuid, &password).await;
-                            }
-                        ));
-                    }
-                    Some(uuid)
-                } else {
-                    None
+                let Some(uuid) = page.add_destination(DestinationData::new(name, hostname, username, options)) else {
+                    return;
+                };
+                if remember_password && !password.expose_secret().is_empty() {
+                    glib::spawn_future_local(glib::clone!(
+                        #[strong]
+                        uuid,
+                        async move {
+                            secrets::store_password(&uuid, &password).await;
+                        }
+                    ));
+                }
+                if connect_after_save {
+                    page.activate_action("win.connect", Some(&uuid.to_variant()))
+                        .expect("win.connect action failed");
                 }
             }
         ));

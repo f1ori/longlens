@@ -21,6 +21,7 @@
 mod about_dialog;
 mod destination_dialog;
 mod destination_row;
+mod destination_service;
 mod password_dialog;
 mod application;
 mod search_provider;

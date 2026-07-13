@@ -29,11 +29,11 @@ use secrecy::ExposeSecret;
 use tracing::warn;
 
 use crate::application::LongLensApplication;
-use crate::destination_dialog::{DestinationFormData, LongLensDestinationDialog};
-use crate::model::destination_object::{DestinationData, DestinationObject};
+use crate::destination_dialog::LongLensDestinationDialog;
 use crate::destination_row::LlDestinationRow;
+use crate::destination_service::DestinationService;
+use crate::model::destination_object::DestinationObject;
 use crate::model::destinations::Destinations;
-use crate::secrets;
 
 
 mod imp {
@@ -141,18 +141,6 @@ impl LlDestinationPage {
             .clone()
     }
 
-    /// Add a destination via the store, returning its UUID
-    /// (None if a duplicate hostname+username already exists).
-    pub fn add_destination(&self, data: DestinationData) -> Option<String> {
-        self.destinations_store()
-            .add(data)
-            .map_err(|error| {
-                warn!(?error, "Could not add destination");
-                error
-            })
-            .ok()
-    }
-
     fn create_destination_row(&self, destination_object: &DestinationObject) -> LlDestinationRow {
         let row = LlDestinationRow::new();
 
@@ -171,7 +159,7 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             move |_| {
-                let store = page.destinations_store();
+                let service = DestinationService::new(page.destinations_store());
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
                 dialog.imp().hostnameentry.set_text(&destination_object.hostname());
@@ -184,37 +172,16 @@ impl LlDestinationPage {
                     #[weak]
                     page,
                     #[strong]
-                    store,
+                    service,
                     #[upgrade_or_default]
                     move |form_data, connect_after_save| {
-                        let DestinationFormData {
-                            name,
-                            hostname,
-                            username,
-                            password,
-                            remember_password,
-                            options,
-                        } = form_data;
                         let uuid = destination_object.uuid();
-                        // Updates the shared DestinationObject in place, so the
-                        // bound row title/subtitle refresh automatically.
-                        let mut data = DestinationData::new(name, hostname, username, options);
-                        data.uuid = uuid.clone();
-                        if let Err(error) = store.update(data) {
+                        let Ok(uuid) = service.update_from_form(&uuid, form_data).map_err(|error| {
                             warn!(?error, "Could not update destination");
+                            error
+                        }) else {
                             return;
-                        }
-                        glib::spawn_future_local(glib::clone!(
-                            #[strong]
-                            uuid,
-                            async move {
-                                if remember_password && !password.expose_secret().is_empty() {
-                                    secrets::store_password(&uuid, &password).await;
-                                } else {
-                                    secrets::delete_password(&uuid).await;
-                                }
-                            }
-                        ));
+                        };
                         if connect_after_save {
                             page.activate_action("win.connect", Some(&uuid.to_variant()))
                                 .expect("win.connect action failed");
@@ -225,15 +192,13 @@ impl LlDestinationPage {
                     #[weak]
                     destination_object,
                     #[strong]
-                    store,
+                    service,
                     move || {
                         let uuid = destination_object.uuid();
-                        if let Err(error) = store.remove(&uuid) {
-                            warn!(?error, "Could not remove destination");
+                        match service.remove(&uuid) {
+                            Ok(removed) => service.finish_delete(removed.uuid),
+                            Err(error) => warn!(?error, "Could not remove destination"),
                         }
-                        glib::spawn_future_local(async move {
-                            secrets::delete_password(&uuid).await;
-                        });
                     }
                 ));
                 // Pre-fill stored password if available.
@@ -243,7 +208,7 @@ impl LlDestinationPage {
                     #[weak]
                     destination_object,
                     async move {
-                        if let Some(pw) = secrets::get_password(&destination_object.uuid()).await {
+                        if let Some(pw) = DestinationService::stored_password(&destination_object.uuid()).await {
                             dialog.imp().passwordentry.set_text(pw.expose_secret());
                         } else {
                             dialog.imp().rememberpasswordswitch.set_active(false);
@@ -260,30 +225,30 @@ impl LlDestinationPage {
             #[weak(rename_to = page)]
             self,
             move |_| {
+                let service = DestinationService::new(page.destinations_store());
                 let uuid = destination_object.uuid();
-                let store = page.destinations_store();
-                let Some((pos, _)) = store.find(&uuid) else {
-                    return;
+                let removed = match service.remove(&uuid) {
+                    Ok(removed) => Rc::new(removed),
+                    Err(error) => {
+                        warn!(?error, "Could not remove destination");
+                        return;
+                    }
                 };
-                let saved_data = Rc::new(destination_object.destination_data());
-                if let Err(error) = store.remove(&uuid) {
-                    warn!(?error, "Could not remove destination");
-                }
 
                 let undone = Rc::new(Cell::new(false));
                 let toast = adw::Toast::new(&gettext("Destination deleted"));
                 toast.set_button_label(Some(&gettext("Undo")));
 
                 toast.connect_button_clicked(glib::clone!(
-                    #[weak]
-                    page,
+                    #[strong]
+                    service,
                     #[strong]
                     undone,
                     #[strong]
-                    saved_data,
+                    removed,
                     move |_| {
                         undone.set(true);
-                        if let Err(error) = page.destinations_store().restore(pos, (*saved_data).clone()) {
+                        if let Err(error) = service.restore((*removed).clone()) {
                             warn!(?error, "Could not restore destination");
                         }
                     }
@@ -291,17 +256,16 @@ impl LlDestinationPage {
 
                 toast.connect_dismissed(glib::clone!(
                     #[strong]
+                    service,
+                    #[strong]
                     undone,
                     #[strong]
-                    uuid,
+                    removed,
                     move |_| {
                         // The destination is already gone from the store; only the
                         // stored password remains to be cleaned up if not undone.
                         if !undone.get() {
-                            let uuid = uuid.clone();
-                            glib::spawn_future_local(async move {
-                                secrets::delete_password(&uuid).await;
-                            });
+                            service.finish_delete(removed.uuid.clone());
                         }
                     }
                 ));
@@ -324,31 +288,20 @@ impl LlDestinationPage {
         dialog.imp().nameentry.set_text(&name);
         dialog.imp().hostnameentry.set_text(&hostname);
         dialog.imp().usernameentry.set_text(&username);
+        let service = DestinationService::new(self.destinations_store());
         dialog.set_on_save(glib::clone!(
             #[weak(rename_to = page)]
             self,
+            #[strong]
+            service,
             #[upgrade_or_default]
             move |form_data, connect_after_save| {
-                let DestinationFormData {
-                    name,
-                    hostname,
-                    username,
-                    password,
-                    remember_password,
-                    options,
-                } = form_data;
-                let Some(uuid) = page.add_destination(DestinationData::new(name, hostname, username, options)) else {
+                let Ok(uuid) = service.add_from_form(form_data).map_err(|error| {
+                    warn!(?error, "Could not add destination");
+                    error
+                }) else {
                     return;
                 };
-                if remember_password && !password.expose_secret().is_empty() {
-                    glib::spawn_future_local(glib::clone!(
-                        #[strong]
-                        uuid,
-                        async move {
-                            secrets::store_password(&uuid, &password).await;
-                        }
-                    ));
-                }
                 if connect_after_save {
                     page.activate_action("win.connect", Some(&uuid.to_variant()))
                         .expect("win.connect action failed");

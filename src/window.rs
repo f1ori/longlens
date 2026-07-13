@@ -430,13 +430,7 @@ impl LongLensWindow {
     }
 
     fn apply_runtime_connection_options(&self, options: ConnectionOptions) {
-        self.imp()
-            .rdpwidget
-            .set_clipboard_enabled(options.clipboard_enabled);
-        self.imp().rdpwidget.set_forward_unicode(options.forward_unicode);
-        self.imp()
-            .rdpwidget
-            .set_inhibit_system_shortcuts(options.inhibit_system_shortcuts);
+        self.imp().rdpwidget.set_connection_options(options);
     }
 
     fn start_connection(
@@ -450,7 +444,6 @@ impl LongLensWindow {
     ) {
         *self.imp().connection_destination_uuid.borrow_mut() = Some(uuid);
         *self.imp().connection_display_title.borrow_mut() = display_title;
-        self.apply_runtime_connection_options(options);
         let (server, port) = crate::rdp::parse_hostname_port(&hostname);
         let w = self.imp().stack.width();
         let h = self.imp().stack.height();

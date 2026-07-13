@@ -94,6 +94,19 @@ mod imp {
             Some((width, height, (scale * 100.0).round() as u32))
         }
 
+        pub(super) fn apply_connection_options(&self, options: ConnectionOptions, announce_clipboard: bool) {
+            self.clipboard.set_enabled(options.clipboard_enabled);
+            if announce_clipboard && options.clipboard_enabled {
+                self.announce_local_clipboard();
+            }
+            {
+                let mut key_handler = self.key_handler.borrow_mut();
+                key_handler.set_forward_unicode(options.forward_unicode);
+                key_handler.set_inhibit_system_shortcuts(options.inhibit_system_shortcuts);
+            }
+            self.update_system_shortcut_inhibition();
+        }
+
         pub fn connect_to_server(
             &self,
             hostname: String,
@@ -119,7 +132,7 @@ mod imp {
             let generation = self.generation.get().wrapping_add(1);
             self.generation.set(generation);
             self.connection_scale.set(self.surface_scale());
-            self.clipboard.set_enabled(options.clipboard_enabled);
+            self.apply_connection_options(options, false);
             self.obj().set_state(RdpState::Connecting);
 
             let config = config::build_config(
@@ -711,31 +724,12 @@ impl RdpWidget {
         self.imp().register_key_controller_on(widget);
     }
 
-    pub fn set_clipboard_enabled(&self, enabled: bool) {
-        let imp = self.imp();
-        imp.clipboard.set_enabled(enabled);
-        if enabled {
-            imp.announce_local_clipboard();
-        }
+    pub fn set_connection_options(&self, options: ConnectionOptions) {
+        self.imp().apply_connection_options(options, true);
     }
 
     pub(in crate::rdp) fn announce_local_clipboard(&self) {
         self.imp().announce_local_clipboard();
-    }
-
-    pub fn set_forward_unicode(&self, enabled: bool) {
-        self.imp()
-            .key_handler
-            .borrow_mut()
-            .set_forward_unicode(enabled);
-    }
-
-    pub fn set_inhibit_system_shortcuts(&self, enabled: bool) {
-        let imp = self.imp();
-        imp.key_handler
-            .borrow_mut()
-            .set_inhibit_system_shortcuts(enabled);
-        imp.update_system_shortcut_inhibition();
     }
 
 }

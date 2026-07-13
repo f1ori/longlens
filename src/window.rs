@@ -266,6 +266,9 @@ mod imp {
                     window.stack.set_visible_child_name(stack_page(widget.state(), n));
                     let state = widget.state();
                     if state == RdpState::Connected || state == RdpState::Connecting {
+                        widget.queue_resize_to_logical_size(window.stack.width(), window.stack.height());
+                    }
+                    if state == RdpState::Connected || state == RdpState::Connecting {
                         let display_title = window.connection_display_title.borrow().clone();
                         obj.set_title(Some(&display_title));
                         crate::utils::set_shortcuts_inhibited(
@@ -284,6 +287,36 @@ mod imp {
             ));
             let model = self.destinations_page.list_model();
             self.stack.set_visible_child_name(stack_page(RdpState::default(), model.n_items()));
+            self.stack.connect_notify_local(
+                Some("width"),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |stack, _| {
+                        let state = window.rdpwidget.state();
+                        if state == RdpState::Connected || state == RdpState::Connecting {
+                            window
+                                .rdpwidget
+                                .queue_resize_to_logical_size(stack.width(), stack.height());
+                        }
+                    }
+                ),
+            );
+            self.stack.connect_notify_local(
+                Some("height"),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |stack, _| {
+                        let state = window.rdpwidget.state();
+                        if state == RdpState::Connected || state == RdpState::Connecting {
+                            window
+                                .rdpwidget
+                                .queue_resize_to_logical_size(stack.width(), stack.height());
+                        }
+                    }
+                ),
+            );
             model.connect_items_changed(glib::clone!(
                 #[weak(rename_to = window)]
                 self,

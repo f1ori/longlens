@@ -289,9 +289,44 @@ mod imp {
 
         fn finish_session(&self) {
             self.clear_disconnect_watchdog();
+            if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
+                source_id.remove();
+            }
             self.clipboard.clear_pending();
             self.session.borrow_mut().take();
             self.obj().set_state(RdpState::Disconnected);
+        }
+
+        pub fn queue_resize_to_logical_size(&self, width: i32, height: i32) {
+            if self.state.get() == RdpState::Disconnected || width <= 0 || height <= 0 {
+                return;
+            }
+            if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
+                source_id.remove();
+            }
+            let source_id = glib::timeout_add_local_once(
+                std::time::Duration::from_millis(500),
+                glib::clone!(
+                    #[weak(rename_to = imp)]
+                    self,
+                    move || {
+                        *imp.resize_timeout.borrow_mut() = None;
+                        if imp.state.get() == RdpState::Disconnected {
+                            return;
+                        }
+                        let Some((width, height, scale)) =
+                            imp.physical_size(width.into(), height.into())
+                        else {
+                            return;
+                        };
+                        imp.connection_scale.set(imp.surface_scale());
+                        if let Some(session) = imp.session.borrow().as_ref() {
+                            session.resize(width.into(), height.into(), scale);
+                        }
+                    }
+                ),
+            );
+            *self.resize_timeout.borrow_mut() = Some(source_id);
         }
 
         fn present_certificate_dialog(
@@ -541,32 +576,7 @@ mod imp {
     impl WidgetImpl for RdpWidget {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
-            if self.state.get() != RdpState::Connected {
-                return;
-            }
-            if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
-                source_id.remove();
-            }
-            let source_id = glib::timeout_add_local_once(
-                std::time::Duration::from_millis(500),
-                glib::clone!(
-                    #[weak(rename_to = imp)]
-                    self,
-                    move || {
-                        *imp.resize_timeout.borrow_mut() = None;
-                        let Some((width, height, scale)) =
-                            imp.physical_size(width.into(), height.into())
-                        else {
-                            return;
-                        };
-                        imp.connection_scale.set(imp.surface_scale());
-                        if let Some(session) = imp.session.borrow().as_ref() {
-                            session.resize(width.into(), height.into(), scale);
-                        }
-                    }
-                ),
-            );
-            *self.resize_timeout.borrow_mut() = Some(source_id);
+            self.queue_resize_to_logical_size(width, height);
         }
 
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
@@ -618,6 +628,10 @@ impl RdpWidget {
 
     pub fn disconnect(&self) {
         self.imp().disconnect();
+    }
+
+    pub fn queue_resize_to_logical_size(&self, width: i32, height: i32) {
+        self.imp().queue_resize_to_logical_size(width, height);
     }
 
     pub fn set_clipboard_enabled(&self, enabled: bool) {

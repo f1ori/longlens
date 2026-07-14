@@ -9,8 +9,9 @@
 A simple, minimal, and modern RDP client
 
 <div align="center">
-  <img src="data/screenshots/screenshot1.png" width="45%" alt="Screenshot 1">
-  <img src="data/screenshots/screenshot2.png" width="45%" alt="Screenshot 2">
+  <img src="data/screenshots/screenshot-windows-light.png" width="30%" alt="Screenshot of connection to Windows host">
+  <img src="data/screenshots/screenshot-overview-light.png" width="30%" alt="Screenshot of initial overview">
+  <img src="data/screenshots/screenshot-bluefin-dark.png" width="30%" alt="Screenshot of connection to GNOME remote desktop">
 </div>
 
 * Clean, minimal UI for managing a list of favorite connections

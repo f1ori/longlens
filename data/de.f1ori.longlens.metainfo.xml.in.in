@@ -61,13 +61,37 @@
   </branding>
 
   <screenshots>
-    <screenshot type="default">
-      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot1.png</image>
-      <caption>Remote session view</caption>
+    <screenshot>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-overview-light.png</image>
+      <caption>Destination list</caption>
     </screenshot>
     <screenshot>
-      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot2.png</image>
-      <caption>Destination list</caption>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-add-light.png</image>
+      <caption>Add a destination</caption>
+    </screenshot>
+    <screenshot type="default">
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-windows-light.png</image>
+      <caption>Remote session view (Windows)</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-bluefin-light.png</image>
+      <caption>Remote session view (GNOME remote desktop)</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-overview-dark.png</image>
+      <caption>Destination list in dark mode</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-add-dark.png</image>
+      <caption>Add a destination in dark mode</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-windows-dark.png</image>
+      <caption>Remote session view (Windows) in dark mode</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://media.githubusercontent.com/media/f1ori/longlens/refs/heads/main/data/screenshots/screenshot-bluefin-dark.png</image>
+      <caption>Remote session view (GNOME remote desktop) in dark mode</caption>
     </screenshot>
   </screenshots>
 

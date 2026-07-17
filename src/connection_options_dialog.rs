@@ -15,8 +15,6 @@ mod imp {
         #[template_child]
         pub clipboardswitch: TemplateChild<adw::SwitchRow>,
         #[template_child]
-        pub soundswitch: TemplateChild<adw::SwitchRow>,
-        #[template_child]
         pub forwardunicodeswitch: TemplateChild<adw::SwitchRow>,
         #[template_child]
         pub inhibitsystemshortcutsswitch: TemplateChild<adw::SwitchRow>,
@@ -79,7 +77,6 @@ impl LongLensConnectionOptionsDialog {
 
     pub fn set_connection_options(&self, options: ConnectionOptions) {
         self.imp().clipboardswitch.set_active(options.clipboard_enabled);
-        self.imp().soundswitch.set_active(options.sound_enabled);
         self.imp().forwardunicodeswitch.set_active(options.forward_unicode);
         self.imp()
             .inhibitsystemshortcutsswitch
@@ -89,7 +86,6 @@ impl LongLensConnectionOptionsDialog {
     pub fn connection_options(&self) -> ConnectionOptions {
         ConnectionOptions {
             clipboard_enabled: self.imp().clipboardswitch.is_active(),
-            sound_enabled: self.imp().soundswitch.is_active(),
             forward_unicode: self.imp().forwardunicodeswitch.is_active(),
             inhibit_system_shortcuts: self.imp().inhibitsystemshortcutsswitch.is_active(),
         }

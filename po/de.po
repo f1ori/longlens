@@ -53,17 +53,6 @@ msgstr "Zwischenablage synchronisieren"
 msgid "Synchronize the local and remote clipboards"
 msgstr "Lokale und entfernte Zwischenablage synchronisieren"
 
-#: data/ui/connection_options_dialog.blp:35
-msgid "Sound Playback"
-msgstr "Audiowiedergabe"
-
-#: data/ui/connection_options_dialog.blp:36
-msgid ""
-"Play remote session audio on this device. Takes effect after reconnecting."
-msgstr ""
-"Audio der Remotesitzung auf diesem Gerät wiedergeben. Wird nach dem erneuten "
-"Verbinden wirksam."
-
 #: data/ui/connection_options_dialog.blp:41
 msgid "Forward Unicode Characters"
 msgstr "Unicode-Zeichen weiterleiten"

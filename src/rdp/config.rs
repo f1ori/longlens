@@ -50,7 +50,6 @@ pub fn build_config(
     width: u16,
     height: u16,
     desktop_scale: u32,
-    sound_enabled: bool,
 ) -> SessionConfig {
     let (domain, username) = split_domain(&username);
     let config_path = gtk::glib::user_config_dir()
@@ -73,7 +72,6 @@ pub fn build_config(
         width: width.into(),
         height: height.into(),
         desktop_scale,
-        sound_enabled,
     }
 }
 

@@ -30,8 +30,6 @@ use uuid::Uuid;
 pub struct ConnectionOptions {
     #[serde(default = "default_clipboard_enabled")]
     pub clipboard_enabled: bool,
-    #[serde(default = "default_sound_enabled")]
-    pub sound_enabled: bool,
     #[serde(default)]
     pub forward_unicode: bool,
     #[serde(default = "default_inhibit_system_shortcuts")]
@@ -42,7 +40,6 @@ impl Default for ConnectionOptions {
     fn default() -> Self {
         Self {
             clipboard_enabled: true,
-            sound_enabled: true,
             forward_unicode: false,
             inhibit_system_shortcuts: true,
         }
@@ -59,8 +56,6 @@ pub struct DestinationData {
     pub username: String,
     #[serde(default = "default_clipboard_enabled")]
     pub clipboard_enabled: bool,
-    #[serde(default = "default_sound_enabled")]
-    pub sound_enabled: bool,
     #[serde(default)]
     pub forward_unicode: bool,
     #[serde(default = "default_inhibit_system_shortcuts")]
@@ -73,10 +68,6 @@ fn new_uuid() -> String {
 
 fn default_clipboard_enabled() -> bool {
     ConnectionOptions::default().clipboard_enabled
-}
-
-fn default_sound_enabled() -> bool {
-    ConnectionOptions::default().sound_enabled
 }
 
 fn default_inhibit_system_shortcuts() -> bool {
@@ -96,7 +87,6 @@ impl DestinationData {
             hostname,
             username,
             clipboard_enabled: options.clipboard_enabled,
-            sound_enabled: options.sound_enabled,
             forward_unicode: options.forward_unicode,
             inhibit_system_shortcuts: options.inhibit_system_shortcuts,
         }
@@ -105,7 +95,6 @@ impl DestinationData {
     pub fn connection_options(&self) -> ConnectionOptions {
         ConnectionOptions {
             clipboard_enabled: self.clipboard_enabled,
-            sound_enabled: self.sound_enabled,
             forward_unicode: self.forward_unicode,
             inhibit_system_shortcuts: self.inhibit_system_shortcuts,
         }
@@ -131,7 +120,6 @@ mod imp {
         #[property(name = "hostname", get, set, type = String, member = hostname)]
         #[property(name = "username", get, set, type = String, member = username)]
         #[property(name = "clipboard-enabled", get, set, type = bool, member = clipboard_enabled)]
-        #[property(name = "sound-enabled", get, set, type = bool, member = sound_enabled)]
         #[property(name = "forward-unicode", get, set, type = bool, member = forward_unicode)]
         #[property(name = "inhibit-system-shortcuts", get, set, type = bool, member = inhibit_system_shortcuts)]
         pub data: RefCell<DestinationData>,
@@ -200,7 +188,6 @@ impl DestinationObject {
             .property("hostname", &data.hostname)
             .property("username", &data.username)
             .property("clipboard-enabled", data.clipboard_enabled)
-            .property("sound-enabled", data.sound_enabled)
             .property("forward-unicode", data.forward_unicode)
             .property("inhibit-system-shortcuts", data.inhibit_system_shortcuts)
             .build()
@@ -212,7 +199,6 @@ impl DestinationObject {
 
     pub fn set_connection_options(&self, options: ConnectionOptions) {
         self.set_clipboard_enabled(options.clipboard_enabled);
-        self.set_sound_enabled(options.sound_enabled);
         self.set_forward_unicode(options.forward_unicode);
         self.set_inhibit_system_shortcuts(options.inhibit_system_shortcuts);
     }

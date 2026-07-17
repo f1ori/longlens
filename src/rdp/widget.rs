@@ -143,7 +143,6 @@ mod imp {
                 width,
                 height,
                 desktop_scale,
-                options.sound_enabled,
             );
             let (output, receiver) = async_channel::bounded(64);
             let Some(session) = Session::spawn(config, output) else {

@@ -60,23 +60,6 @@ template $LongLensDestinationDialog: Adw.Dialog {
           active: true;
         }
       }
-
-      Adw.PreferencesGroup {
-        Adw.ActionRow {
-          title: _("Connection Options");
-          subtitle: _("Clipboard sync, sound playback, and keyboard input");
-          activatable: true;
-          activated => $handle_optionsrow_activated() swapped;
-
-          [suffix]
-          Button {
-            icon-name: "go-next-symbolic";
-            valign: center;
-            styles ["flat"]
-            clicked => $handle_optionsbutton_clicked() swapped;
-          }
-        }
-      }
     }
   }
 }

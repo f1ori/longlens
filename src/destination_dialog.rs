@@ -6,7 +6,6 @@ use gettextrs::gettext;
 use gtk::glib;
 use secrecy::SecretString;
 
-use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
 use crate::model::destination_object::{ConnectionOptions, DestinationData};
 
 pub struct DestinationFormData {
@@ -80,29 +79,6 @@ mod imp {
         #[template_callback]
         fn handle_saveonlybutton_clicked(&self, _button: &gtk::Button) {
             self.save_only();
-        }
-
-        #[template_callback]
-        fn handle_optionsrow_activated(&self, _row: &adw::ActionRow) {
-            self.show_options_dialog();
-        }
-
-        #[template_callback]
-        fn handle_optionsbutton_clicked(&self, _button: &gtk::Button) {
-            self.show_options_dialog();
-        }
-
-        fn show_options_dialog(&self) {
-            let dialog = LongLensConnectionOptionsDialog::new();
-            dialog.set_connection_options(self.connection_options.get());
-            dialog.set_on_save(glib::clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |options| {
-                    this.connection_options.set(options);
-                }
-            ));
-            dialog.present(Some(&*self.obj()));
         }
 
         fn form_values(&self) -> DestinationFormData {

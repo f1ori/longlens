@@ -32,14 +32,6 @@ template $LongLensWindow: Adw.ApplicationWindow {
       }
 
       [end]
-      Button connectionoptionsbutton {
-        icon-name: "preferences-system-symbolic";
-        tooltip-text: _("Connection Options");
-        visible: false;
-        clicked => $handle_connectionoptionsbutton_clicked() swapped;
-      }
-
-      [end]
       Button fullscreenbutton {
         icon-name: "view-fullscreen-symbolic";
         tooltip-text: _("Fullscreen");
@@ -132,6 +124,25 @@ menu primary_menu {
   section {
     item {
       custom: "theme";
+    }
+  }
+
+  section {
+    label: _("Connection Settings");
+
+    item {
+      action: "win.clipboard-sync";
+      label: _("Clipboard Sync");
+    }
+
+    item {
+      action: "win.forward-unicode";
+      label: _("Send Input as Unicode");
+    }
+
+    item {
+      action: "win.inhibit-system-shortcuts";
+      label: _("Send System Shortcuts to Remote");
     }
   }
 

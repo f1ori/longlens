@@ -26,7 +26,7 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::connection_controller::ConnectionController;
-use crate::connection_options_dialog::LongLensConnectionOptionsDialog;
+use crate::model::destination_object::ConnectionOptions;
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
 use crate::destinations_page::LlDestinationPage;
@@ -65,8 +65,6 @@ mod imp {
         #[template_child]
         pub fullscreenbutton: TemplateChild<gtk::Button>,
         #[template_child]
-        pub connectionoptionsbutton: TemplateChild<gtk::Button>,
-        #[template_child]
         pub fullscreen_bar: TemplateChild<LlFullscreenBar>,
         #[template_child]
         pub rdpwidget: TemplateChild<RdpWidget>,
@@ -94,11 +92,6 @@ mod imp {
         #[template_callback]
         fn handle_fullscreenbutton_clicked(&self, _button: &gtk::Button) {
             self.obj().fullscreen();
-        }
-
-        #[template_callback]
-        fn handle_connectionoptionsbutton_clicked(&self, _button: &gtk::Button) {
-            self.obj().show_connection_options_dialog();
         }
 
     }
@@ -141,14 +134,6 @@ mod imp {
                 .build();
             self.rdpwidget
                 .bind_property::<gtk::Button>("state", self.fullscreenbutton.as_ref(), "visible")
-                .transform_to(|_binding, value: glib::Value| {
-                    let state = value.get::<RdpState>().unwrap_or_default();
-                    Some(state == RdpState::Connected)
-                })
-                .sync_create()
-                .build();
-            self.rdpwidget
-                .bind_property::<gtk::Button>("state", self.connectionoptionsbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
                     Some(state == RdpState::Connected)
@@ -200,6 +185,11 @@ mod imp {
                             obj.unfullscreen();
                         }
                     }
+                    let options = (state == RdpState::Connected)
+                        .then(|| obj.connection_controller().current_destination())
+                        .flatten()
+                        .map(|destination| destination.connection_options());
+                    obj.set_connection_options_actions(options);
                 }
             ));
             let model = self.destinations_page.list_model();
@@ -249,6 +239,7 @@ mod imp {
                 ))
                 .expect("Could not set connection controller");
             self.obj().setup_actions();
+            self.obj().set_connection_options_actions(None);
             self.obj().populate_menu();
             self.rdpwidget.register_key_controller_on(&*self.obj());
         }
@@ -316,6 +307,14 @@ impl LongLensWindow {
     }
 
     fn setup_actions(&self) {
+        let defaults = ConnectionOptions::default();
+        self.add_connection_option_action("clipboard-sync", defaults.clipboard_enabled);
+        self.add_connection_option_action("forward-unicode", defaults.forward_unicode);
+        self.add_connection_option_action(
+            "inhibit-system-shortcuts",
+            defaults.inhibit_system_shortcuts,
+        );
+
         let action_connect = gio::ActionEntry::builder("connect")
             .parameter_type(Some(glib::VariantTy::new("s").unwrap()))
             .activate(move |window: &Self, _action, parameter| {
@@ -363,6 +362,60 @@ impl LongLensWindow {
         self.add_action_entries([action_connect, action_add_from_rdp]);
     }
 
+    fn add_connection_option_action(&self, name: &str, initial_state: bool) {
+        let action = gio::SimpleAction::new_stateful(name, None, &initial_state.to_variant());
+        let window = self.downgrade();
+        action.connect_activate(move |action, _| {
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            let current = action
+                .state()
+                .and_then(|state| state.get::<bool>())
+                .unwrap_or(false);
+            action.set_state(&(!current).to_variant());
+            window.apply_connection_options_actions();
+        });
+        self.add_action(&action);
+    }
+
+    fn apply_connection_options_actions(&self) {
+        let options = ConnectionOptions {
+            clipboard_enabled: self.connection_option_action_state("clipboard-sync"),
+            forward_unicode: self.connection_option_action_state("forward-unicode"),
+            inhibit_system_shortcuts: self
+                .connection_option_action_state("inhibit-system-shortcuts"),
+        };
+        self.connection_controller()
+            .apply_runtime_connection_options(options);
+    }
+
+    fn connection_option_action_state(&self, name: &str) -> bool {
+        self.lookup_action(name)
+            .and_downcast::<gio::SimpleAction>()
+            .and_then(|action| action.state())
+            .and_then(|state| state.get::<bool>())
+            .unwrap_or(false)
+    }
+
+    fn set_connection_options_actions(&self, options: Option<ConnectionOptions>) {
+        let enabled = options.is_some();
+        let options = options.unwrap_or_default();
+        for (name, state) in [
+            ("clipboard-sync", options.clipboard_enabled),
+            ("forward-unicode", options.forward_unicode),
+            (
+                "inhibit-system-shortcuts",
+                options.inhibit_system_shortcuts,
+            ),
+        ] {
+            if let Some(action) = self.lookup_action(name).and_downcast::<gio::SimpleAction>() {
+                action.set_state(&state.to_variant());
+                action.set_enabled(enabled);
+            }
+        }
+    }
+
     /// Open the Add Destination dialog pre-filled from a parsed `.rdp` file.
     pub fn show_add_from_rdp(&self, conn: crate::rdp_file::RdpConnection) {
         self.imp()
@@ -376,20 +429,6 @@ impl LongLensWindow {
             Some(&gettext("The file could not be read or contains no valid connection.")),
         );
         dialog.add_response("close", &gettext("Close"));
-        dialog.present(Some(self));
-    }
-
-    fn show_connection_options_dialog(&self) {
-        let controller = self.connection_controller();
-        let Some(dest) = controller.current_destination() else {
-            return;
-        };
-
-        let dialog = LongLensConnectionOptionsDialog::new();
-        dialog.set_connection_options(dest.connection_options());
-        dialog.set_on_save(move |options| {
-            controller.apply_runtime_connection_options(options);
-        });
         dialog.present(Some(self));
     }
 

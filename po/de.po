@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: longlens\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-10 20:36+0000\n"
+"POT-Creation-Date: 2026-07-17 19:13+0000\n"
 "PO-Revision-Date: 2026-06-10 22:24+0200\n"
 "Last-Translator: Florian Richter <florian@richter-es.de>\n"
 "Language-Team: de\n"
@@ -31,56 +31,16 @@ msgstr "RDP;Remote;Fernzugriff;Fernwartung;Desktop;Remotedesktop;Client;GTK;Wind
 msgid "New Window"
 msgstr "Neues Fenster"
 
-#: data/ui/connection_options_dialog.blp:5 data/ui/destination_dialog.blp:66
-#: data/ui/window.blp:37
-msgid "Connection Options"
-msgstr "Verbindungsoptionen"
-
-#: data/ui/connection_options_dialog.blp:14 data/ui/destination_dialog.blp:14
-#: data/ui/password_dialog.blp:14 src/rdp/widget.rs:359 src/window.rs:312
-msgid "Cancel"
-msgstr "Abbrechen"
-
-#: data/ui/connection_options_dialog.blp:20
-msgid "Save"
-msgstr "Speichern"
-
-#: data/ui/connection_options_dialog.blp:29
-msgid "Clipboard Sync"
-msgstr "Zwischenablage synchronisieren"
-
-#: data/ui/connection_options_dialog.blp:30
-msgid "Synchronize the local and remote clipboards"
-msgstr "Lokale und entfernte Zwischenablage synchronisieren"
-
-#: data/ui/connection_options_dialog.blp:41
-msgid "Forward Unicode Characters"
-msgstr "Unicode-Zeichen weiterleiten"
-
-#: data/ui/connection_options_dialog.blp:42
-msgid ""
-"Send characters instead of physical keycodes. Useful for mismatched keyboard "
-"layouts, but shortcuts may stop working."
-msgstr ""
-"Zeichen statt physischer Tastencodes senden. Nützlich bei unterschiedlichen "
-"Tastaturbelegungen, aber Tastenkombinationen funktionieren möglicherweise "
-"nicht mehr."
-
-#: data/ui/connection_options_dialog.blp:46
-msgid "Inhibit System Shortcuts"
-msgstr "System-Tastenkombinationen unterdrücken"
-
-#: data/ui/connection_options_dialog.blp:47
-msgid ""
-"Let the remote session receive system shortcuts such as Super or Alt+Tab."
-msgstr ""
-"Der Remotesitzung System-Tastenkombinationen wie Super oder Alt+Tab senden."
-
 #. Translators: Big label button to create the first destination if none exists
-#: data/ui/destination_dialog.blp:5 data/ui/window.blp:65
-#: src/destination_dialog.rs:225
+#: data/ui/destination_dialog.blp:5 data/ui/window.blp:57
+#: src/destination_dialog.rs:197
 msgid "Add Destination"
 msgstr "Ziel hinzufügen"
+
+#: data/ui/destination_dialog.blp:14 data/ui/password_dialog.blp:14
+#: src/rdp/widget.rs:406 src/window.rs:259
+msgid "Cancel"
+msgstr "Abbrechen"
 
 #: data/ui/destination_dialog.blp:20
 msgid "Save & Connect"
@@ -122,10 +82,6 @@ msgstr "Passwort merken"
 msgid "Store the password in the keyring"
 msgstr "Das Passwort im Schlüsselbund speichern"
 
-#: data/ui/destination_dialog.blp:67
-msgid "Clipboard sync, sound playback, and keyboard input"
-msgstr "Zwischenablage, Audiowiedergabe und Tastatureingabe"
-
 #: data/ui/destination_row.blp:12
 msgid "Edit"
 msgstr "Bearbeiten"
@@ -138,8 +94,8 @@ msgstr "Löschen"
 msgid "Leave fullscreen"
 msgstr "Vollbild verlassen"
 
-#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:71 src/window.rs:98
-#: src/window.rs:450
+#: data/ui/fullscreen_bar.blp:29 src/destinations_page.rs:71 src/window.rs:88
+#: src/window.rs:431
 msgid "Close"
 msgstr "Schließen"
 
@@ -177,7 +133,7 @@ msgstr "Dunkler Stil"
 msgid "Long Lens"
 msgstr "Long Lens"
 
-#: data/ui/window.blp:14 src/window.rs:313
+#: data/ui/window.blp:14 src/window.rs:260
 msgid "Disconnect"
 msgstr "Trennen"
 
@@ -189,27 +145,43 @@ msgstr "Ziel hinzufügen"
 msgid "Main Menu"
 msgstr "Hauptmenü"
 
-#: data/ui/window.blp:45
+#: data/ui/window.blp:37
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: data/ui/window.blp:60
+#: data/ui/window.blp:52
 msgid "No destinations"
 msgstr "Keine Ziele"
 
-#: data/ui/window.blp:94
+#: data/ui/window.blp:86
 msgid "Connecting…"
 msgstr "Verbinde…"
 
-#: data/ui/window.blp:120
+#: data/ui/window.blp:112
 msgid "Add from .rdp File"
 msgstr "Aus .rdp-Datei hinzufügen"
 
-#: data/ui/window.blp:128
+#: data/ui/window.blp:120
 msgid "_New Window"
 msgstr "_Neues Fenster"
 
-#: data/ui/window.blp:141
+#: data/ui/window.blp:131
+msgid "Connection Settings"
+msgstr "Verbindungseinstellungen"
+
+#: data/ui/window.blp:135
+msgid "Clipboard Sync"
+msgstr "Zwischenablage synchronisieren"
+
+#: data/ui/window.blp:140
+msgid "Send Input as Unicode"
+msgstr "Eingabe als Unicode senden"
+
+#: data/ui/window.blp:145
+msgid "Send System Shortcuts to Remote"
+msgstr "System-Tastenkombinationen an Remotesitzung senden"
+
+#: data/ui/window.blp:152
 msgid "_About Long Lens"
 msgstr "_Über Long Lens"
 
@@ -218,11 +190,11 @@ msgstr "_Über Long Lens"
 msgid "translator-credits"
 msgstr "Florian Richter <florian@richter-es.de>"
 
-#: src/destination_dialog.rs:223
+#: src/destination_dialog.rs:195
 msgid "Edit Destination"
 msgstr "Ziel bearbeiten"
 
-#: src/destinations_page.rs:70 src/window.rs:97
+#: src/destinations_page.rs:70 src/window.rs:87
 msgid "Connection error"
 msgstr "Verbindungsfehler"
 
@@ -246,67 +218,67 @@ msgstr ""
 msgid "Could not connect to the server."
 msgstr "Verbindung zum Server konnte nicht hergestellt werden."
 
-#: src/rdp/widget.rs:140
+#: src/rdp/widget.rs:152
 msgid "Could not initialize FreeRDP."
 msgstr "FreeRDP konnte nicht initialisiert werden."
 
-#: src/rdp/widget.rs:307
+#: src/rdp/widget.rs:354
 msgid "The server certificate has changed"
 msgstr "Das Serverzertifikat hat sich geändert"
 
-#: src/rdp/widget.rs:309
+#: src/rdp/widget.rs:356
 msgid "Untrusted server certificate"
 msgstr "Nicht vertrauenswürdiges Serverzertifikat"
 
-#: src/rdp/widget.rs:313
+#: src/rdp/widget.rs:360
 msgid "Server"
 msgstr "Server"
 
-#: src/rdp/widget.rs:316
+#: src/rdp/widget.rs:363
 msgid "Subject"
 msgstr "Inhaber"
 
-#: src/rdp/widget.rs:318
+#: src/rdp/widget.rs:365
 msgid "Issuer"
 msgstr "Aussteller"
 
-#: src/rdp/widget.rs:320
+#: src/rdp/widget.rs:367
 msgid "Fingerprint"
 msgstr "Fingerabdruck"
 
-#: src/rdp/widget.rs:326
+#: src/rdp/widget.rs:373
 msgid "Common name"
 msgstr "Allgemeiner Name"
 
-#: src/rdp/widget.rs:333
+#: src/rdp/widget.rs:380
 msgid "The certificate name does not match this server."
 msgstr "Der Zertifikatsname stimmt nicht mit diesem Server überein."
 
-#: src/rdp/widget.rs:339
+#: src/rdp/widget.rs:386
 msgid "Previous fingerprint"
 msgstr "Vorheriger Fingerabdruck"
 
-#: src/rdp/widget.rs:346
+#: src/rdp/widget.rs:393
 msgid "Previous subject"
 msgstr "Vorheriger Inhaber"
 
-#: src/rdp/widget.rs:353
+#: src/rdp/widget.rs:400
 msgid "Previous issuer"
 msgstr "Vorheriger Aussteller"
 
-#: src/rdp/widget.rs:360
+#: src/rdp/widget.rs:407
 msgid "Trust Once"
 msgstr "Einmal vertrauen"
 
-#: src/rdp/widget.rs:361
+#: src/rdp/widget.rs:408
 msgid "Trust and Remember"
 msgstr "Vertrauen und merken"
 
-#: src/window.rs:309
+#: src/window.rs:256
 msgid "Disconnect?"
 msgstr "Trennen?"
 
-#: src/window.rs:310
+#: src/window.rs:257
 msgid ""
 "You are currently connected to a remote session. Do you want to disconnect "
 "and close?"
@@ -314,22 +286,48 @@ msgstr ""
 "Sie sind derzeit mit einer Remote-Sitzung verbunden. Möchten Sie die "
 "Verbindung trennen und schließen?"
 
-#: src/window.rs:405
+#: src/window.rs:332
 msgid "RDP Files"
 msgstr "RDP-Dateien"
 
-#: src/window.rs:411
+#: src/window.rs:338
 msgid "Open .rdp File"
 msgstr ".rdp-Datei öffnen"
 
-#: src/window.rs:447
+#: src/window.rs:428
 msgid "Could not open .rdp file"
 msgstr ".rdp-Datei konnte nicht geöffnet werden"
 
-#: src/window.rs:448
+#: src/window.rs:429
 msgid "The file could not be read or contains no valid connection."
 msgstr ""
 "Die Datei konnte nicht gelesen werden oder enthält keine gültige Verbindung."
+
+#~ msgid "Forward Unicode Characters"
+#~ msgstr "Unicode-Zeichen weiterleiten"
+
+#~ msgid "Synchronize the local and remote clipboards"
+#~ msgstr "Lokale und entfernte Zwischenablage synchronisieren"
+
+#~ msgid ""
+#~ "Send characters instead of physical keycodes. Useful for mismatched "
+#~ "keyboard layouts, but shortcuts may stop working."
+#~ msgstr ""
+#~ "Zeichen statt physischer Tastencodes senden. Nützlich bei "
+#~ "unterschiedlichen Tastaturbelegungen, aber Tastenkombinationen "
+#~ "funktionieren möglicherweise nicht mehr."
+
+#~ msgid ""
+#~ "Let the remote session receive system shortcuts such as Super or Alt+Tab."
+#~ msgstr ""
+#~ "Der Remotesitzung System-Tastenkombinationen wie Super oder Alt+Tab "
+#~ "senden."
+
+#~ msgid "Save"
+#~ msgstr "Speichern"
+
+#~ msgid "Clipboard sync, sound playback, and keyboard input"
+#~ msgstr "Zwischenablage, Audiowiedergabe und Tastatureingabe"
 
 #~ msgid "More Options"
 #~ msgstr "Weitere Optionen"

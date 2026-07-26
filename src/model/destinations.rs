@@ -17,8 +17,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 use gtk::gio;
 use gtk::prelude::*;
@@ -87,7 +89,11 @@ impl Destinations {
         let path = data_path();
         let tmp_path = path.with_extension("json.tmp");
         {
-            let file = File::create(&tmp_path)?;
+            let mut options = OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            #[cfg(unix)]
+            options.mode(0o600);
+            let file = options.open(&tmp_path)?;
             serde_json::to_writer_pretty(file, &self.items())?;
         }
         std::fs::rename(tmp_path, path)?;

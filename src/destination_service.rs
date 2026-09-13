@@ -28,7 +28,7 @@
 use std::rc::Rc;
 
 use gtk::glib;
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
 use crate::destination_dialog::DestinationFormData;
 use crate::model::destination_object::DestinationData;
@@ -119,7 +119,7 @@ impl DestinationService {
 
     fn save_password_choice(uuid: String, remember_password: bool, password: SecretString) {
         glib::spawn_future_local(async move {
-            if remember_password && !password.expose_secret().is_empty() {
+            if remember_password {
                 secrets::store_password(&uuid, &password).await;
             } else {
                 secrets::delete_password(&uuid).await;

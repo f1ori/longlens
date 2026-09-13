@@ -56,5 +56,8 @@ A few caveats when using the devcontainer:
     # Build using flatpak-builder
     flatpak-builder --user --install --force-clean _flatpak_build de.f1ori.longlens.Devel.json
 
+    # Or flatpak-builder from a flatpak
+    flatpak run org.flatpak.Builder --install --user --force-clean _flatpak_build de.f1ori.longlens.Devel.json
+
     # Run
     flatpak run de.f1ori.longlens.Devel

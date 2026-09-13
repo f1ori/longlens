@@ -30,9 +30,11 @@ use tracing::{info, warn};
 use crate::model::destination_object::ConnectionOptions;
 
 use super::clipboard::Clipboard;
-use super::errors::friendly_connection_error;
+use super::errors::{friendly_connection_error, friendly_termination_error};
 use super::key_handler::{KeyHandler, RemoteKeySender};
-use super::session::{CertificateDecision, CertificateDetails, Session, SessionEvent};
+use super::session::{
+    CertificateDecision, CertificateDetails, Session, SessionEvent, TerminationReason,
+};
 use super::{config, input, render};
 
 const GRACEFUL_DISCONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
@@ -44,6 +46,9 @@ pub enum RdpState {
     Disconnected = 0,
     Connecting = 1,
     Connected = 2,
+    /// The transport died and the session is being restored. The session
+    /// object stays alive throughout, so this is not `Disconnected`.
+    Interrupted = 3,
 }
 
 mod imp {
@@ -54,6 +59,16 @@ mod imp {
     pub struct RdpWidget {
         #[property(get, set, builder(RdpState::Disconnected))]
         state: Cell<RdpState>,
+        /// Reconnect attempts made so far in the current cycle.
+        #[property(get)]
+        reconnect_attempt: Cell<u32>,
+        /// Seconds until the next attempt; 0 while one is in flight.
+        #[property(get)]
+        reconnect_seconds_left: Cell<u32>,
+        /// Whether a successful reconnect restores the existing remote session
+        /// rather than opening a new one.
+        #[property(get)]
+        reconnect_restores_session: Cell<bool>,
         session: RefCell<Option<Session>>,
         texture: RefCell<Option<gdk::MemoryTexture>>,
         resize_timeout: RefCell<Option<glib::SourceId>>,
@@ -124,8 +139,7 @@ mod imp {
             };
             info!("Connecting to {hostname}:{port} {width}x{height}");
 
-            self.disconnect();
-            self.clear_disconnect_watchdog();
+            self.abandon_session();
             *self.texture.borrow_mut() = None;
             self.obj().queue_draw();
 
@@ -173,14 +187,31 @@ mod imp {
             if let Some(response) = self.pending_certificate.borrow_mut().take() {
                 let _ = response.send(CertificateDecision::Reject);
             }
-            let Some(session) = self.session.borrow().as_ref().cloned() else {
+            let session = self.session.borrow().as_ref().cloned();
+            let Some(session) = session else {
                 return;
             };
-            if self.state.get() == RdpState::Connecting {
-                session.abort();
-            } else {
+
+            // A graceful goodbye only makes sense on a live connection; wait
+            // for the worker to deliver it.
+            if self.state.get() == RdpState::Connected {
                 session.disconnect();
                 self.arm_disconnect_watchdog(session);
+                return;
+            }
+
+            // While connecting or reconnecting the worker is often blocked in
+            // a FreeRDP call that cannot be cut short - name resolution and TCP
+            // timeouts take tens of seconds. Ask it to stop, then let go of the
+            // session right away instead of making the user wait on a screen
+            // they have already dismissed. The worker holds its own reference
+            // and frees the native session once it finally returns.
+            self.finish_session();
+        }
+
+        pub fn reconnect_now(&self) {
+            if let Some(session) = self.session.borrow().as_ref() {
+                session.reconnect_now();
             }
         }
 
@@ -290,27 +321,97 @@ mod imp {
                     self.obj()
                         .emit_by_name::<()>("connection-failed", &[&message]);
                 }
-                SessionEvent::Terminated(detail) => {
-                    if let Some(detail) = detail {
-                        warn!("RDP session terminated: {detail}");
+                SessionEvent::Interrupted {
+                    detail,
+                    can_restore_session,
+                } => {
+                    warn!("RDP session interrupted: {detail}");
+                    // Keep the texture: the last frame stays on screen behind
+                    // the reconnect page and reappears without a black flash.
+                    self.clipboard.clear_pending();
+                    if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
+                        source_id.remove();
+                    }
+                    self.set_reconnect_progress(0, 0);
+                    self.reconnect_restores_session.set(can_restore_session);
+                    self.obj().notify_reconnect_restores_session();
+                    self.obj().set_state(RdpState::Interrupted);
+                }
+                SessionEvent::ReconnectCountdown {
+                    attempt,
+                    seconds_left,
+                } => {
+                    self.set_reconnect_progress(attempt, seconds_left);
+                }
+                SessionEvent::ReconnectAttempt { attempt } => {
+                    self.set_reconnect_progress(attempt, 0);
+                }
+                SessionEvent::Reconnected => {
+                    self.obj().set_state(RdpState::Connected);
+                    self.announce_local_clipboard();
+                }
+                SessionEvent::Terminated(reason) => {
+                    if let TerminationReason::Lost(error) = &reason {
+                        let message = friendly_termination_error(error);
+                        self.finish_session();
+                        self.obj()
+                            .emit_by_name::<()>("connection-failed", &[&message]);
+                        return;
                     }
                     self.finish_session();
                 }
             }
         }
 
-        fn finish_session(&self) {
+        fn set_reconnect_progress(&self, attempt: u32, seconds_left: u32) {
+            if self.reconnect_attempt.replace(attempt) != attempt {
+                self.obj().notify_reconnect_attempt();
+            }
+            if self.reconnect_seconds_left.replace(seconds_left) != seconds_left {
+                self.obj().notify_reconnect_seconds_left();
+            }
+        }
+
+        /// Stops the current session and stops listening to its worker,
+        /// without touching the state property.
+        ///
+        /// The worker thread may still be inside a blocking FreeRDP call. It
+        /// owns a reference of its own, so the native session outlives this
+        /// and is freed once the worker returns; retiring the generation makes
+        /// sure its remaining events are ignored.
+        fn abandon_session(&self) {
+            if let Some(response) = self.pending_certificate.borrow_mut().take() {
+                let _ = response.send(CertificateDecision::Reject);
+            }
+            if let Some(session) = self.session.borrow_mut().take() {
+                // A graceful goodbye, when one is wanted, has already been
+                // sent by disconnect(); by the time we get here the worker
+                // only needs to stop.
+                session.abort();
+            }
             self.clear_disconnect_watchdog();
             if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
                 source_id.remove();
             }
             self.clipboard.clear_pending();
-            self.session.borrow_mut().take();
+            self.set_reconnect_progress(0, 0);
+            self.generation.set(self.generation.get().wrapping_add(1));
+        }
+
+        fn finish_session(&self) {
+            self.abandon_session();
             self.obj().set_state(RdpState::Disconnected);
         }
 
         pub fn queue_resize_to_logical_size(&self, width: i32, height: i32) {
-            if self.state.get() == RdpState::Disconnected || width <= 0 || height <= 0 {
+            let state = self.state.get();
+            // Resizing an interrupted session is pointless; the window resizes
+            // it again once it is back.
+            if state == RdpState::Disconnected
+                || state == RdpState::Interrupted
+                || width <= 0
+                || height <= 0
+            {
                 return;
             }
             if let Some(source_id) = self.resize_timeout.borrow_mut().take() {
@@ -323,7 +424,8 @@ mod imp {
                     self,
                     move || {
                         *imp.resize_timeout.borrow_mut() = None;
-                        if imp.state.get() == RdpState::Disconnected {
+                        let state = imp.state.get();
+                        if state == RdpState::Disconnected || state == RdpState::Interrupted {
                             return;
                         }
                         let Some((width, height, scale)) =
@@ -713,6 +815,11 @@ impl RdpWidget {
 
     pub fn disconnect(&self) {
         self.imp().disconnect();
+    }
+
+    /// Cuts the current reconnect countdown short.
+    pub fn reconnect_now(&self) {
+        self.imp().reconnect_now();
     }
 
     pub fn queue_resize_to_logical_size(&self, width: i32, height: i32) {

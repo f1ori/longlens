@@ -25,6 +25,11 @@ pub struct LLSession {
     _private: [u8; 0],
 }
 
+/// Results of [`ll_session_reconnect`], mirroring the `LL_RECONNECT_*` defines.
+pub const LL_RECONNECT_OK: i32 = 0;
+pub const LL_RECONNECT_FAILED: i32 = 1;
+pub const LL_RECONNECT_REFUSED: i32 = 2;
+
 #[repr(C)]
 pub struct LLSessionConfig {
     pub hostname: *const c_char,
@@ -87,9 +92,12 @@ unsafe extern "C" {
     pub fn ll_session_free(session: *mut LLSession);
     pub fn ll_session_connect(session: *mut LLSession) -> i32;
     pub fn ll_session_poll(session: *mut LLSession, timeout_ms: u32) -> i32;
+    pub fn ll_session_reconnect(session: *mut LLSession) -> i32;
+    pub fn ll_session_can_restore_session(session: *const LLSession) -> i32;
     pub fn ll_session_disconnect(session: *mut LLSession);
     pub fn ll_session_abort(session: *mut LLSession);
     pub fn ll_session_last_error(session: *const LLSession) -> u32;
+    pub fn ll_session_error_info(session: *const LLSession) -> u32;
     pub fn ll_error_name(code: u32) -> *const c_char;
     pub fn ll_error_string(code: u32) -> *const c_char;
     pub fn ll_error_class(code: u32) -> u32;

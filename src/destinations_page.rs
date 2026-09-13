@@ -64,13 +64,6 @@ mod imp {
                 .activate_action("win.connect", Some(&destination.uuid().to_variant()))
                 .expect("win.connect action failed");
         }
-
-        #[template_callback]
-        fn handle_connection_failed(&self, reason: String) {
-            let dialog = adw::AlertDialog::new(Some(&gettext("Connection error")), Some(&reason));
-            dialog.add_response("close", &gettext("Close"));
-            dialog.present(Some(&*self.obj()));
-        }
     }
 
     #[glib::object_subclass]

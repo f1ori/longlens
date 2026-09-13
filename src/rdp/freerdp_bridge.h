@@ -27,6 +27,13 @@
 
 typedef struct LLSession LLSession;
 
+/* Results of ll_session_reconnect(). */
+#define LL_RECONNECT_OK 0
+/* The attempt failed, but trying again later may succeed. */
+#define LL_RECONNECT_FAILED 1
+/* The server ended the session on purpose; do not try again. */
+#define LL_RECONNECT_REFUSED 2
+
 typedef struct {
     const char* hostname;
     uint16_t port;
@@ -72,9 +79,12 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
 void ll_session_free(LLSession* session);
 int ll_session_connect(LLSession* session);
 int ll_session_poll(LLSession* session, uint32_t timeout_ms);
+int ll_session_reconnect(LLSession* session);
+int ll_session_can_restore_session(const LLSession* session);
 void ll_session_disconnect(LLSession* session);
 void ll_session_abort(LLSession* session);
 uint32_t ll_session_last_error(const LLSession* session);
+uint32_t ll_session_error_info(const LLSession* session);
 const char* ll_error_name(uint32_t code);
 const char* ll_error_string(uint32_t code);
 uint32_t ll_error_class(uint32_t code);

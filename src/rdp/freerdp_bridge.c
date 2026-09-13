@@ -644,6 +644,10 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
                                     config->desktop_scale) &&
         freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, 100) &&
         freerdp_settings_set_bool(settings, FreeRDP_AutoLogonEnabled, TRUE) &&
+        /* Ask the server for an auto-reconnect cookie so that a reconnect after
+           a network drop reattaches to the existing session instead of opening
+           a new one. Without this the cookie is neither stored nor sent. */
+        freerdp_settings_set_bool(settings, FreeRDP_AutoReconnectionEnabled, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_RedirectClipboard, TRUE) &&
         freerdp_settings_set_uint32(settings, FreeRDP_ClipboardFeatureMask,
                                     CLIPRDR_FLAG_DEFAULT_MASK) &&
@@ -716,6 +720,35 @@ int ll_session_poll(LLSession* session, uint32_t timeout_ms)
     return 1;
 }
 
+int ll_session_reconnect(LLSession* session)
+{
+    if (!session || !session->context)
+        return LL_RECONNECT_REFUSED;
+
+    rdpContext* context = session->context;
+
+    /* A non-zero error info means the server ended the session on purpose
+       (logoff, kick, idle timeout); reconnecting would be wrong. This mirrors
+       client_auto_reconnect() in FreeRDP's common client code. */
+    if (freerdp_error_info(context->instance) != 0)
+        return LL_RECONNECT_REFUSED;
+
+    freerdp_set_last_error_log(context, FREERDP_ERROR_SUCCESS);
+    if (freerdp_reconnect(context->instance))
+        return LL_RECONNECT_OK;
+
+    session->last_error = freerdp_get_last_error(context);
+    return LL_RECONNECT_FAILED;
+}
+
+int ll_session_can_restore_session(const LLSession* session)
+{
+    if (!session || !session->context)
+        return 0;
+    return freerdp_settings_get_pointer(session->context->settings,
+                                        FreeRDP_ServerAutoReconnectCookie) != NULL;
+}
+
 void ll_session_disconnect(LLSession* session)
 {
     if (session && session->context)
@@ -731,6 +764,13 @@ void ll_session_abort(LLSession* session)
 uint32_t ll_session_last_error(const LLSession* session)
 {
     return session ? session->last_error : FREERDP_ERROR_CONNECT_UNDEFINED;
+}
+
+uint32_t ll_session_error_info(const LLSession* session)
+{
+    if (!session || !session->context)
+        return 0;
+    return freerdp_error_info(session->context->instance);
 }
 
 const char* ll_error_name(uint32_t code)

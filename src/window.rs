@@ -20,7 +20,7 @@
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gettextrs::gettext;
+use gettextrs::{gettext, ngettext};
 use gtk::{gio, glib};
 use std::cell::OnceCell;
 use std::rc::Rc;
@@ -35,6 +35,8 @@ use crate::fullscreen_bar::LlFullscreenBar;
 fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
     if state == RdpState::Connected {
         "rdppage"
+    } else if state == RdpState::Interrupted {
+        "reconnectpage"
     } else if state == RdpState::Connecting {
         "connectingpage"
     } else if n_destinations == 0 {
@@ -42,6 +44,12 @@ fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
     } else {
         "destinationspage"
     }
+}
+
+/// True while a session exists, whether it is being established, live, or
+/// being restored after a network drop.
+fn has_session(state: RdpState) -> bool {
+    state != RdpState::Disconnected
 }
 
 mod imp {
@@ -68,6 +76,12 @@ mod imp {
         pub fullscreen_bar: TemplateChild<LlFullscreenBar>,
         #[template_child]
         pub rdpwidget: TemplateChild<RdpWidget>,
+        #[template_child]
+        pub reconnect_page: TemplateChild<adw::StatusPage>,
+        #[template_child]
+        pub reconnect_spinner: TemplateChild<adw::Spinner>,
+        #[template_child]
+        pub reconnect_status_label: TemplateChild<gtk::Label>,
         pub connection_controller: OnceCell<Rc<ConnectionController>>,
     }
     #[gtk::template_callbacks]
@@ -94,6 +108,47 @@ mod imp {
             self.obj().fullscreen();
         }
 
+        #[template_callback]
+        fn handle_reconnect_now_clicked(&self, _button: &gtk::Button) {
+            self.rdpwidget.reconnect_now();
+        }
+
+        /// Reflects the reconnect cycle reported by the RDP widget on the
+        /// "Connection Lost" page.
+        pub(super) fn update_reconnect_page(&self) {
+            if self.rdpwidget.state() != RdpState::Interrupted {
+                return;
+            }
+
+            let title = self
+                .obj()
+                .connection_controller()
+                .current_display_title()
+                .unwrap_or_default();
+            let description = if self.rdpwidget.reconnect_restores_session() {
+                // Translators: %s is the destination name, e.g. “Office PC (10.0.0.5)”
+                gettext("Lost the connection to “%s”. Your session will be restored.")
+            } else {
+                // Translators: %s is the destination name, e.g. “Office PC (10.0.0.5)”
+                gettext("Lost the connection to “%s”.")
+            };
+            self.reconnect_page
+                .set_description(Some(&description.replace("%s", &title)));
+
+            let seconds_left = self.rdpwidget.reconnect_seconds_left();
+            self.reconnect_spinner.set_visible(seconds_left == 0);
+            let status = if seconds_left == 0 {
+                gettext("Reconnecting…")
+            } else {
+                ngettext(
+                    "Retrying in %d second…",
+                    "Retrying in %d seconds…",
+                    seconds_left,
+                )
+                .replace("%d", &seconds_left.to_string())
+            };
+            self.reconnect_status_label.set_label(&status);
+        }
     }
 
     #[glib::object_subclass]
@@ -120,7 +175,7 @@ mod imp {
                 .bind_property::<gtk::Button>("state", self.disconnectbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
-                    Some(state == RdpState::Connected || state == RdpState::Connecting)
+                    Some(has_session(state))
                 })
                 .sync_create()
                 .build();
@@ -128,7 +183,7 @@ mod imp {
                 .bind_property::<adw::SplitButton>("state", self.adddestinationbutton.as_ref(), "visible")
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
-                    Some(state != RdpState::Connected && state != RdpState::Connecting)
+                    Some(!has_session(state))
                 })
                 .sync_create()
                 .build();
@@ -172,7 +227,11 @@ mod imp {
                     if state == RdpState::Connected || state == RdpState::Connecting {
                         widget.queue_resize_to_logical_size(window.stack.width(), window.stack.height());
                     }
-                    if state == RdpState::Connected || state == RdpState::Connecting {
+                    window.update_reconnect_page();
+                    // An interrupted session is still a session: keep the
+                    // destination, the title and fullscreen while it is being
+                    // restored.
+                    if has_session(state) {
                         let display_title = obj
                             .connection_controller()
                             .current_display_title()
@@ -192,6 +251,21 @@ mod imp {
                     obj.set_connection_options_actions(options);
                 }
             ));
+            for property in [
+                "reconnect-attempt",
+                "reconnect-seconds-left",
+                "reconnect-restores-session",
+            ] {
+                self.rdpwidget.connect_notify_local(
+                    Some(property),
+                    glib::clone!(
+                        #[weak(rename_to = window)]
+                        self,
+                        move |_, _| window.update_reconnect_page()
+                    ),
+                );
+            }
+
             let model = self.destinations_page.list_model();
             self.stack.set_visible_child_name(stack_page(RdpState::default(), model.n_items()));
             self.stack.connect_notify_local(
@@ -247,8 +321,11 @@ mod imp {
     impl WidgetImpl for LongLensWindow {}
     impl WindowImpl for LongLensWindow {
         fn close_request(&self) -> glib::Propagation {
+            // Closing while a session is interrupted loses nothing: the remote
+            // session survives on the server, so only confirm for a live one.
             let state = self.rdpwidget.state();
             if state != RdpState::Connected && state != RdpState::Connecting {
+                self.rdpwidget.disconnect();
                 return self.parent_close_request();
             }
 

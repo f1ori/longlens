@@ -88,6 +88,43 @@ template $LongLensWindow: Adw.ApplicationWindow {
           };
         }
 
+        StackPage {
+          name: "reconnectpage";
+
+          child: Adw.StatusPage reconnect_page {
+            icon-name: "network-offline-symbolic";
+            title: _("Connection Lost");
+
+            child: Gtk.Box {
+              orientation: vertical;
+              spacing: 18;
+              halign: center;
+
+              Gtk.Box {
+                spacing: 12;
+                halign: center;
+
+                Adw.Spinner reconnect_spinner {
+                  width-request: 16;
+                  height-request: 16;
+                  visible: false;
+                }
+
+                Gtk.Label reconnect_status_label {
+                  css-classes: ["dim-label"];
+                }
+              }
+
+              Gtk.Button {
+                css-classes: ["suggested-action", "pill"];
+                label: _("Reconnect Now");
+                halign: center;
+                clicked => $handle_reconnect_now_clicked() swapped;
+              }
+            };
+          };
+        }
+
         StackPage rdppage {
           name: "rdppage";
 

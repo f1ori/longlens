@@ -22,6 +22,18 @@ use gettextrs::gettext;
 
 use super::session::ConnectionError;
 
+/// Reports why an established session could not be restored.
+pub(super) fn friendly_termination_error(error: &ConnectionError) -> String {
+    match error.class {
+        1 | 2 => friendly_connection_error(error),
+        _ => format!(
+            "{}\n\n{}",
+            gettext("The connection to the server was interrupted and could not be restored."),
+            error_detail(error)
+        ),
+    }
+}
+
 pub(super) fn friendly_connection_error(error: &ConnectionError) -> String {
     match error.class {
         1 => gettext(
@@ -30,17 +42,20 @@ pub(super) fn friendly_connection_error(error: &ConnectionError) -> String {
         2 => gettext(
             "Access was denied. The username or password may be incorrect, or this account is not allowed to connect.",
         ),
-        _ => {
-            let detail = if error.message.is_empty() {
-                if error.name.is_empty() {
-                    format!("FreeRDP error 0x{:08x}", error.code)
-                } else {
-                    error.name.clone()
-                }
-            } else {
-                error.message.clone()
-            };
-            format!("{}\n\n{}", gettext("Could not connect to the server."), detail)
-        }
+        _ => format!(
+            "{}\n\n{}",
+            gettext("Could not connect to the server."),
+            error_detail(error)
+        ),
     }
+}
+
+fn error_detail(error: &ConnectionError) -> String {
+    if !error.message.is_empty() {
+        return error.message.clone();
+    }
+    if !error.name.is_empty() {
+        return error.name.clone();
+    }
+    format!("FreeRDP error 0x{:08x}", error.code)
 }

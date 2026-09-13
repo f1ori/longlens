@@ -129,7 +129,32 @@ pub enum SessionEvent {
         response: mpsc::SyncSender<CertificateDecision>,
     },
     ConnectionFailure(ConnectionError),
-    Terminated(Option<String>),
+    /// The transport died. The worker keeps the session alive and starts
+    /// trying to restore it; `can_restore_session` tells whether the server
+    /// issued an auto-reconnect cookie, i.e. whether a successful attempt
+    /// reattaches to the existing session rather than opening a new one.
+    Interrupted {
+        detail: String,
+        can_restore_session: bool,
+    },
+    /// Waiting before the next attempt. `attempt` is the number of attempts
+    /// made so far.
+    ReconnectCountdown { attempt: u32, seconds_left: u32 },
+    /// `attempt` is in progress right now.
+    ReconnectAttempt { attempt: u32 },
+    /// The session is live again.
+    Reconnected,
+    Terminated(TerminationReason),
+}
+
+#[derive(Debug)]
+pub enum TerminationReason {
+    /// We asked for it: the disconnect button, an abort or the watchdog.
+    Local,
+    /// The server ended the session: logoff, kick, idle timeout.
+    Remote,
+    /// Gave up after an unrecoverable failure while trying to reconnect.
+    Lost(ConnectionError),
 }
 
 #[derive(Debug)]
@@ -138,6 +163,15 @@ pub struct ConnectionError {
     pub class: u32,
     pub name: String,
     pub message: String,
+}
+
+impl ConnectionError {
+    /// Credential and authorisation failures will not fix themselves, so they
+    /// end a reconnect cycle instead of prolonging it. The classes come from
+    /// `ll_error_class` in the C adapter.
+    pub fn is_recoverable(&self) -> bool {
+        !matches!(self.class, 1 | 2)
+    }
 }
 
 #[derive(Debug)]
@@ -176,6 +210,8 @@ enum SessionCommand {
         size: u32,
     },
     Disconnect,
+    /// Cut a reconnect countdown short.
+    ReconnectNow,
 }
 
 struct CallbackContext {
@@ -188,6 +224,10 @@ struct NativeSession {
     raw: NonNull<ffi::LLSession>,
     _callbacks: Box<CallbackContext>,
     aborted: AtomicBool,
+    /// Set as soon as a shutdown is requested. `ll_session_abort` makes
+    /// `freerdp_shall_disconnect_context()` true, so without this flag a
+    /// local abort is indistinguishable from a remote logoff.
+    stopping: AtomicBool,
 }
 
 // The adapter documents abort as cross-thread safe. All other native calls are
@@ -204,7 +244,23 @@ impl Drop for NativeSession {
 impl NativeSession {
     fn abort(&self) {
         self.aborted.store(true, Ordering::Release);
+        self.stopping.store(true, Ordering::Release);
         unsafe { ffi::ll_session_abort(self.raw.as_ptr()) };
+    }
+
+    fn stopping(&self) -> bool {
+        self.stopping.load(Ordering::Acquire)
+    }
+
+    /// True when the server issued an auto-reconnect cookie, so a successful
+    /// reconnect restores the existing session.
+    fn can_restore_session(&self) -> bool {
+        unsafe { ffi::ll_session_can_restore_session(self.raw.as_ptr()) != 0 }
+    }
+
+    /// Non-zero when the server ended the session deliberately.
+    fn error_info(&self) -> u32 {
+        unsafe { ffi::ll_session_error_info(self.raw.as_ptr()) }
     }
 
     fn connection_error(&self) -> ConnectionError {
@@ -272,6 +328,7 @@ impl Session {
             raw,
             _callbacks: callback_context,
             aborted: AtomicBool::new(false),
+            stopping: AtomicBool::new(false),
         });
         let (commands, receiver) = mpsc::channel();
         let worker_native = native.clone();
@@ -357,19 +414,40 @@ impl Session {
     }
 
     pub fn disconnect(&self) {
+        self.native.stopping.store(true, Ordering::Release);
         let _ = self.commands.send(SessionCommand::Disconnect);
     }
 
     pub fn abort(&self) {
         self.native.abort();
     }
+
+    pub fn reconnect_now(&self) {
+        let _ = self.commands.send(SessionCommand::ReconnectNow);
+    }
+}
+
+/// How the poll loop gave up control.
+enum Flow {
+    /// The session is over for good.
+    Ended(TerminationReason),
+    /// The transport died; the session may be restorable.
+    Interrupted(ConnectionError),
+}
+
+/// Delays between reconnect attempts, in seconds. The last entry repeats for
+/// every further attempt, so the cycle continues until the user ends it.
+const RETRY_DELAYS: [u32; 6] = [2, 5, 10, 20, 30, 60];
+
+fn retry_delay(attempt: u32) -> u32 {
+    RETRY_DELAYS[(attempt as usize).min(RETRY_DELAYS.len() - 1)]
 }
 
 fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionCommand>) {
     let connected = unsafe { ffi::ll_session_connect(native.raw.as_ptr()) } != 0;
     if !connected {
         let event = if native.aborted.load(Ordering::Acquire) {
-            SessionEvent::Terminated(None)
+            SessionEvent::Terminated(TerminationReason::Local)
         } else {
             SessionEvent::ConnectionFailure(native.connection_error())
         };
@@ -377,6 +455,28 @@ fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionComman
         return;
     }
 
+    loop {
+        match run_session(&native, &commands) {
+            Flow::Ended(reason) => {
+                let _ = native
+                    ._callbacks
+                    .output
+                    .send_blocking(SessionEvent::Terminated(reason));
+                return;
+            }
+            Flow::Interrupted(error) => {
+                // reconnect_loop reports its own terminal event when it gives up.
+                if !reconnect_loop(&native, &commands, error) {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+/// Pumps commands and FreeRDP events until the session ends or the transport
+/// dies.
+fn run_session(native: &Arc<NativeSession>, commands: &mpsc::Receiver<SessionCommand>) -> Flow {
     loop {
         while let Ok(command) = commands.try_recv() {
             match command {
@@ -461,25 +561,163 @@ fn run_worker(native: Arc<NativeSession>, commands: mpsc::Receiver<SessionComman
                 },
                 SessionCommand::Disconnect => {
                     unsafe { ffi::ll_session_disconnect(native.raw.as_ptr()) };
-                    let _ = native
-                        ._callbacks
-                        .output
-                        .send_blocking(SessionEvent::Terminated(None));
-                    return;
+                    return Flow::Ended(TerminationReason::Local);
                 }
+                // Only meaningful while a reconnect countdown is running.
+                SessionCommand::ReconnectNow => {}
             }
         }
 
         let result = unsafe { ffi::ll_session_poll(native.raw.as_ptr(), 10) };
         if result <= 0 {
-            let detail = (result < 0).then(|| native.connection_error().message);
-            let _ = native
-                ._callbacks
-                .output
-                .send_blocking(SessionEvent::Terminated(detail));
-            return;
+            if native.stopping() {
+                return Flow::Ended(TerminationReason::Local);
+            }
+            // 0 means freerdp_shall_disconnect_context(): the server ended the
+            // session. A negative result is a transport failure.
+            if result == 0 {
+                return Flow::Ended(TerminationReason::Remote);
+            }
+            return Flow::Interrupted(native.connection_error());
         }
     }
+}
+
+/// Tries to restore an interrupted session, reporting progress as it goes.
+///
+/// Returns `true` when the session is live again, `false` after having sent a
+/// terminal event.
+fn reconnect_loop(
+    native: &Arc<NativeSession>,
+    commands: &mpsc::Receiver<SessionCommand>,
+    error: ConnectionError,
+) -> bool {
+    let send = |event| {
+        let _ = native._callbacks.output.send_blocking(event);
+    };
+
+    if native.error_info() != 0 {
+        // The server told us why it ended the session, so it is not coming back.
+        send(SessionEvent::Terminated(TerminationReason::Remote));
+        return false;
+    }
+    if !error.is_recoverable() {
+        send(SessionEvent::Terminated(TerminationReason::Lost(error)));
+        return false;
+    }
+
+    let can_restore_session = native.can_restore_session();
+    warn!(
+        detail = %error.message,
+        can_restore_session,
+        "RDP session interrupted; trying to reconnect"
+    );
+    send(SessionEvent::Interrupted {
+        detail: error.message,
+        can_restore_session,
+    });
+
+    let mut attempt = 0;
+    loop {
+        if !wait_for_retry(native, commands, attempt, &send) {
+            return false;
+        }
+        // freerdp_connect() resets the abort event when it starts, so an abort
+        // that lands just before an attempt would be swallowed and the user
+        // would wait out a full DNS/TCP timeout. Check once more here.
+        if native.stopping() {
+            send(SessionEvent::Terminated(TerminationReason::Local));
+            return false;
+        }
+
+        attempt += 1;
+        send(SessionEvent::ReconnectAttempt { attempt });
+        match unsafe { ffi::ll_session_reconnect(native.raw.as_ptr()) } {
+            ffi::LL_RECONNECT_OK => {
+                info!(attempt, "Reconnected");
+                send(SessionEvent::Reconnected);
+                return true;
+            }
+            ffi::LL_RECONNECT_REFUSED => {
+                send(SessionEvent::Terminated(TerminationReason::Remote));
+                return false;
+            }
+            status => {
+                if status != ffi::LL_RECONNECT_FAILED {
+                    warn!(status, "Unexpected reconnect result");
+                }
+                if native.stopping() {
+                    send(SessionEvent::Terminated(TerminationReason::Local));
+                    return false;
+                }
+                let error = native.connection_error();
+                if !error.is_recoverable() {
+                    send(SessionEvent::Terminated(TerminationReason::Lost(error)));
+                    return false;
+                }
+                warn!(attempt, detail = %error.message, "Reconnect attempt failed");
+            }
+        }
+    }
+}
+
+/// Waits out the backoff delay before `attempt + 1`, counting down once a
+/// second. Returns `false` when the cycle was ended, having sent the terminal
+/// event itself.
+fn wait_for_retry(
+    native: &Arc<NativeSession>,
+    commands: &mpsc::Receiver<SessionCommand>,
+    attempt: u32,
+    send: &impl Fn(SessionEvent),
+) -> bool {
+    const TICK: std::time::Duration = std::time::Duration::from_millis(100);
+
+    let delay = retry_delay(attempt);
+    let mut seconds_left = delay;
+    send(SessionEvent::ReconnectCountdown {
+        attempt,
+        seconds_left,
+    });
+
+    let start = std::time::Instant::now();
+    // Never sleep out the whole delay in one go: the user must be able to end
+    // the session or ask for an immediate retry at any point.
+    while seconds_left > 0 {
+        loop {
+            match commands.try_recv() {
+                Ok(SessionCommand::Disconnect) => {
+                    send(SessionEvent::Terminated(TerminationReason::Local));
+                    return false;
+                }
+                // Skip the rest of the countdown.
+                Ok(SessionCommand::ReconnectNow) => return true,
+                // Input and clipboard traffic is pointless while offline.
+                Ok(_) => continue,
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    send(SessionEvent::Terminated(TerminationReason::Local));
+                    return false;
+                }
+            }
+        }
+        if native.stopping() {
+            send(SessionEvent::Terminated(TerminationReason::Local));
+            return false;
+        }
+
+        std::thread::sleep(TICK);
+
+        let elapsed = start.elapsed().as_secs() as u32;
+        let remaining = delay.saturating_sub(elapsed);
+        if remaining != seconds_left {
+            seconds_left = remaining;
+            send(SessionEvent::ReconnectCountdown {
+                attempt,
+                seconds_left,
+            });
+        }
+    }
+    true
 }
 
 unsafe extern "C" fn frame_callback(
@@ -722,5 +960,32 @@ unsafe fn optional_c_string(value: *const c_char) -> Option<String> {
         None
     } else {
         Some(unsafe { c_string(value) })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_delay_backs_off_and_then_repeats() {
+        let delays: Vec<u32> = (0..8).map(retry_delay).collect();
+        assert_eq!(delays, [2, 5, 10, 20, 30, 60, 60, 60]);
+    }
+
+    fn error_with_class(class: u32) -> ConnectionError {
+        ConnectionError {
+            code: 0,
+            class,
+            name: String::new(),
+            message: String::new(),
+        }
+    }
+
+    #[test]
+    fn credential_errors_end_the_reconnect_cycle() {
+        assert!(!error_with_class(1).is_recoverable());
+        assert!(!error_with_class(2).is_recoverable());
+        assert!(error_with_class(0).is_recoverable());
     }
 }

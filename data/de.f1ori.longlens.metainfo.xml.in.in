@@ -96,6 +96,15 @@
   </screenshots>
 
   <releases>
+    <release version="0.5.0" date="2026-09-13">
+      <description translate="no">
+        <p>Fifth beta release</p>
+        <ul>
+          <li>Detect connection lost and allow to reconnect</li>
+          <li>Fix saving empty passwords</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-07-07">
       <description translate="no">
         <p>Forth beta release</p>

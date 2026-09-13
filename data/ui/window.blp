@@ -98,7 +98,7 @@ template $LongLensWindow: Adw.ApplicationWindow {
             child: Gtk.Box {
               orientation: vertical;
               spacing: 18;
-              halign: center;
+              halign: fill;
 
               Gtk.Box {
                 spacing: 12;
@@ -111,7 +111,7 @@ template $LongLensWindow: Adw.ApplicationWindow {
                 }
 
                 Gtk.Label reconnect_status_label {
-                  css-classes: ["dim-label"];
+                  css-classes: ["dim-label", "numeric"];
                 }
               }
 

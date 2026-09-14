@@ -20,11 +20,7 @@
         "append-path" : "/usr/lib/sdk/rust-stable/bin",
         "build-args" : [
             "--share=network"
-        ],
-        "env" : {
-            "RUST_BACKTRACE" : "1",
-            "RUST_LOG" : "longlens=debug"
-        }
+        ]
     },
     "cleanup" : [
         "/include",
@@ -38,7 +34,6 @@
         "*.a"
     ],
     "modules" : [
-        "build-aux/openssl.json",
         "build-aux/freerdp.json",
         {
             "name" : "longlens",

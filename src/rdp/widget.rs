@@ -22,6 +22,7 @@ use adw::prelude::*;
 use gettextrs::gettext;
 use gtk::glib::subclass::Signal;
 use gtk::glib::{self, Properties};
+use gtk::gsk;
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::sync::{OnceLock, mpsc};
@@ -765,15 +766,47 @@ mod imp {
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             let width = self.obj().width() as f32;
             let height = self.obj().height() as f32;
+            if width <= 0.0 || height <= 0.0 {
+                return;
+            }
+
+            let scale = self.surface_scale() as f32;
+            let Some((physical_w, physical_h, _)) = self.physical_size(width as f64, height as f64)
+            else {
+                return;
+            };
+
+            let round = gsk::SnapDirection::Round;
+
+            snapshot.save();
+            snapshot.set_snap(gsk::RectSnap::new(round, round, round, round));
+
             if let Some(texture) = self.texture.borrow().as_ref() {
-                snapshot
-                    .append_texture(texture, &gtk::graphene::Rect::new(0.0, 0.0, width, height));
+                if (physical_w as i32 - texture.width()).abs() <= 1 && (physical_h as i32 - texture.height()).abs() <= 1 {
+                    snapshot.scale(1.0 / scale, 1.0 / scale);
+                    snapshot.append_scaled_texture(
+                        texture,
+                        gsk::ScalingFilter::Nearest,
+                        &gtk::graphene::Rect::new(
+                            0.0,
+                            0.0,
+                            texture.width() as f32,
+                            texture.height() as f32,
+                        ),
+                    );
+                } else {
+                    snapshot.append_texture(
+                        texture,
+                        &gtk::graphene::Rect::new(0.0, 0.0, width, height),
+                    );
+                }
             } else {
                 snapshot.append_color(
                     &gdk::RGBA::BLACK,
                     &gtk::graphene::Rect::new(0.0, 0.0, width, height),
                 );
             }
+            snapshot.restore();
             self.parent_snapshot(snapshot);
         }
     }

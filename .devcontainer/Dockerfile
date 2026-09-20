@@ -1,4 +1,4 @@
-FROM registry.fedoraproject.org/fedora-minimal:44
+FROM registry.fedoraproject.org/fedora-minimal:45
 RUN microdnf install -y --refresh \
     git \
     cargo \

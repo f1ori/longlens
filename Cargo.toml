@@ -6,9 +6,9 @@ build = "build.rs"
 
 [dependencies]
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
-gtk = { version = "0.11", package = "gtk4", features = ["v4_22"] }
-gdk = { version = "0.11", package = "gdk4", features = ["v4_22"] }
-adw = { version = "0.9.1", package = "libadwaita", features = ["v1_9"] }
+gtk = { version = "0.11", package = "gtk4", features = ["v4_24"] }
+gdk = { version = "0.11", package = "gdk4", features = ["v4_24"] }
+adw = { version = "0.9.1", package = "libadwaita", features = ["v1_10"] }
 tokio = { version = "1", features = ["sync"] }
 
 # Logging

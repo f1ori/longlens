@@ -26,10 +26,9 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
-
+use crate::LongLensWindow;
 use crate::config::APP_ID;
 use crate::model::destinations::Destinations;
-use crate::LongLensWindow;
 
 mod imp {
     use super::*;
@@ -99,7 +98,11 @@ mod imp {
                 let window_weak = window.downgrade();
                 glib::idle_add_local_once(move || {
                     if let Some(w) = window_weak.upgrade() {
-                        let _ = gtk::prelude::WidgetExt::activate_action(&w, "win.connect", Some(&uuid.to_variant()));
+                        let _ = gtk::prelude::WidgetExt::activate_action(
+                            &w,
+                            "win.connect",
+                            Some(&uuid.to_variant()),
+                        );
                     }
                 });
             } else {

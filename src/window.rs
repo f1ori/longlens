@@ -26,11 +26,11 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::connection_controller::ConnectionController;
+use crate::destinations_page::LlDestinationPage;
+use crate::fullscreen_bar::LlFullscreenBar;
 use crate::model::destination_object::ConnectionOptions;
 use crate::rdp::{RdpState, RdpWidget};
 use crate::theme_selector::LlThemeSelector;
-use crate::destinations_page::LlDestinationPage;
-use crate::fullscreen_bar::LlFullscreenBar;
 
 fn stack_page(state: RdpState, n_destinations: u32) -> &'static str {
     if state == RdpState::Connected {
@@ -180,7 +180,11 @@ mod imp {
                 .sync_create()
                 .build();
             self.rdpwidget
-                .bind_property::<adw::SplitButton>("state", self.adddestinationbutton.as_ref(), "visible")
+                .bind_property::<adw::SplitButton>(
+                    "state",
+                    self.adddestinationbutton.as_ref(),
+                    "visible",
+                )
                 .transform_to(|_binding, value: glib::Value| {
                     let state = value.get::<RdpState>().unwrap_or_default();
                     Some(!has_session(state))
@@ -222,10 +226,15 @@ mod imp {
                 move |widget| {
                     let obj = window.obj();
                     let n = window.destinations_page.list_model().n_items();
-                    window.stack.set_visible_child_name(stack_page(widget.state(), n));
+                    window
+                        .stack
+                        .set_visible_child_name(stack_page(widget.state(), n));
                     let state = widget.state();
                     if state == RdpState::Connected || state == RdpState::Connecting {
-                        widget.queue_resize_to_logical_size(window.stack.width(), window.stack.height());
+                        widget.queue_resize_to_logical_size(
+                            window.stack.width(),
+                            window.stack.height(),
+                        );
                     }
                     window.update_reconnect_page();
                     // An interrupted session is still a session: keep the
@@ -267,7 +276,8 @@ mod imp {
             }
 
             let model = self.destinations_page.list_model();
-            self.stack.set_visible_child_name(stack_page(RdpState::default(), model.n_items()));
+            self.stack
+                .set_visible_child_name(stack_page(RdpState::default(), model.n_items()));
             self.stack.connect_notify_local(
                 Some("width"),
                 glib::clone!(
@@ -303,7 +313,9 @@ mod imp {
                 self,
                 move |model, _, _, _| {
                     let state = window.rdpwidget.state();
-                    window.stack.set_visible_child_name(stack_page(state, model.n_items()));
+                    window
+                        .stack
+                        .set_visible_child_name(stack_page(state, model.n_items()));
                 }
             ));
             self.connection_controller
@@ -331,7 +343,9 @@ mod imp {
 
             let dialog = adw::AlertDialog::new(
                 Some(&gettext("Disconnect?")),
-                Some(&gettext("You are currently connected to a remote session. Do you want to disconnect and close?")),
+                Some(&gettext(
+                    "You are currently connected to a remote session. Do you want to disconnect and close?",
+                )),
             );
             dialog.add_response("cancel", &gettext("Cancel"));
             dialog.add_response("disconnect", &gettext("Disconnect"));
@@ -481,10 +495,7 @@ impl LongLensWindow {
         for (name, state) in [
             ("clipboard-sync", options.clipboard_enabled),
             ("forward-unicode", options.forward_unicode),
-            (
-                "inhibit-system-shortcuts",
-                options.inhibit_system_shortcuts,
-            ),
+            ("inhibit-system-shortcuts", options.inhibit_system_shortcuts),
         ] {
             if let Some(action) = self.lookup_action(name).and_downcast::<gio::SimpleAction>() {
                 action.set_state(&state.to_variant());
@@ -503,7 +514,9 @@ impl LongLensWindow {
     fn show_rdp_file_error(&self) {
         let dialog = adw::AlertDialog::new(
             Some(&gettext("Could not open .rdp file")),
-            Some(&gettext("The file could not be read or contains no valid connection.")),
+            Some(&gettext(
+                "The file could not be read or contains no valid connection.",
+            )),
         );
         dialog.add_response("close", &gettext("Close"));
         dialog.present(Some(self));

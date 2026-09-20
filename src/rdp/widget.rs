@@ -24,7 +24,7 @@ use gtk::glib::subclass::Signal;
 use gtk::glib::{self, Properties};
 use gtk::subclass::prelude::*;
 use std::cell::{Cell, RefCell};
-use std::sync::{mpsc, OnceLock};
+use std::sync::{OnceLock, mpsc};
 use tracing::{info, warn};
 
 use crate::model::destination_object::ConnectionOptions;
@@ -109,7 +109,11 @@ mod imp {
             Some((width, height, (scale * 100.0).round() as u32))
         }
 
-        pub(super) fn apply_connection_options(&self, options: ConnectionOptions, announce_clipboard: bool) {
+        pub(super) fn apply_connection_options(
+            &self,
+            options: ConnectionOptions,
+            announce_clipboard: bool,
+        ) {
             self.clipboard.set_enabled(options.clipboard_enabled);
             if announce_clipboard && options.clipboard_enabled {
                 self.announce_local_clipboard();
@@ -483,11 +487,7 @@ mod imp {
                 ));
             }
             if let Some(old) = details.old_fingerprint.as_deref() {
-                body.push_str(&format!(
-                    "\n{}: {}",
-                    gettext("Previous fingerprint"),
-                    old
-                ));
+                body.push_str(&format!("\n{}: {}", gettext("Previous fingerprint"), old));
             }
             if let Some(old_subject) = details.old_subject.as_deref() {
                 body.push_str(&format!(
@@ -497,11 +497,7 @@ mod imp {
                 ));
             }
             if let Some(old_issuer) = details.old_issuer.as_deref() {
-                body.push_str(&format!(
-                    "\n{}: {}",
-                    gettext("Previous issuer"),
-                    old_issuer
-                ));
+                body.push_str(&format!("\n{}: {}", gettext("Previous issuer"), old_issuer));
             }
 
             let dialog = adw::AlertDialog::new(Some(&heading), Some(&body));
@@ -770,10 +766,8 @@ mod imp {
             let width = self.obj().width() as f32;
             let height = self.obj().height() as f32;
             if let Some(texture) = self.texture.borrow().as_ref() {
-                snapshot.append_texture(
-                    texture,
-                    &gtk::graphene::Rect::new(0.0, 0.0, width, height),
-                );
+                snapshot
+                    .append_texture(texture, &gtk::graphene::Rect::new(0.0, 0.0, width, height));
             } else {
                 snapshot.append_color(
                     &gdk::RGBA::BLACK,
@@ -802,15 +796,8 @@ impl RdpWidget {
         height: u16,
         options: ConnectionOptions,
     ) {
-        self.imp().connect_to_server(
-            hostname,
-            port,
-            username,
-            password,
-            width,
-            height,
-            options,
-        );
+        self.imp()
+            .connect_to_server(hostname, port, username, password, width, height, options);
     }
 
     pub fn disconnect(&self) {
@@ -837,5 +824,4 @@ impl RdpWidget {
     pub(in crate::rdp) fn announce_local_clipboard(&self) {
         self.imp().announce_local_clipboard();
     }
-
 }

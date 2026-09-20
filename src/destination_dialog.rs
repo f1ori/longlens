@@ -145,17 +145,18 @@ mod imp {
                 ),
             );
 
-            self.rememberpasswordswitch.connect_active_notify(glib::clone!(
-                #[weak(rename_to = dialog)]
-                self,
-                move |switch| {
-                    let active = switch.is_active();
-                    dialog.passwordentry.set_sensitive(active);
-                    if !active {
-                        dialog.passwordentry.set_text("");
+            self.rememberpasswordswitch
+                .connect_active_notify(glib::clone!(
+                    #[weak(rename_to = dialog)]
+                    self,
+                    move |switch| {
+                        let active = switch.is_active();
+                        dialog.passwordentry.set_sensitive(active);
+                        if !active {
+                            dialog.passwordentry.set_text("");
+                        }
                     }
-                }
-            ));
+                ));
 
             self.obj().connect_map(|dialog| {
                 dialog.imp().hostnameentry.grab_focus();
@@ -168,7 +169,10 @@ mod imp {
                         if !available {
                             dialog.imp().rememberpasswordswitch.set_active(false);
                         }
-                        dialog.imp().passwordentry.set_sensitive(dialog.imp().rememberpasswordswitch.is_active());
+                        dialog
+                            .imp()
+                            .passwordentry
+                            .set_sensitive(dialog.imp().rememberpasswordswitch.is_active());
                     }
                 ));
             });
@@ -198,10 +202,7 @@ impl LongLensDestinationDialog {
         }
     }
 
-    pub fn set_on_save(
-        &self,
-        callback: impl Fn(DestinationFormData, bool) + 'static,
-    ) {
+    pub fn set_on_save(&self, callback: impl Fn(DestinationFormData, bool) + 'static) {
         *self.imp().on_save.borrow_mut() = Some(Box::new(callback));
     }
 

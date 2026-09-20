@@ -18,8 +18,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gettextrs::gettext;
 use adw::prelude::*;
+use gettextrs::gettext;
 use gtk::Window;
 
 use crate::config::{METAINFO_PATH, PROFILE, VCS_TAG, VERSION};

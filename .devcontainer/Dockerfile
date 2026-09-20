@@ -3,6 +3,7 @@ RUN microdnf install -y --refresh \
     git \
     cargo \
     rust \
+    rustfmt \
     meson \
     msgfmt \
     blueprint-compiler \

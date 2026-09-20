@@ -103,12 +103,7 @@ unsafe extern "C" {
     pub fn ll_error_class(code: u32) -> u32;
     pub fn ll_session_send_key(session: *mut LLSession, scancode: u32, pressed: i32) -> i32;
     pub fn ll_session_send_unicode(session: *mut LLSession, code: u16, pressed: i32) -> i32;
-    pub fn ll_session_send_mouse(
-        session: *mut LLSession,
-        flags: u16,
-        x: u16,
-        y: u16,
-    ) -> i32;
+    pub fn ll_session_send_mouse(session: *mut LLSession, flags: u16, x: u16, y: u16) -> i32;
     pub fn ll_session_resize(
         session: *mut LLSession,
         width: u32,

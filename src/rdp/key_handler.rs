@@ -84,11 +84,7 @@ impl KeyHandler {
         glib::Propagation::Stop
     }
 
-    pub(super) fn handle_key_released(
-        &mut self,
-        keycode: u32,
-        sender: &mut impl RemoteKeySender,
-    ) {
+    pub(super) fn handle_key_released(&mut self, keycode: u32, sender: &mut impl RemoteKeySender) {
         let keycode = keycode as u16;
         if self.filtered_system_shortcut_keys.remove(&keycode) {
             self.pressed_shortcut_modifier_keys.remove(&keycode);
@@ -195,7 +191,10 @@ mod tests {
 
         assert_eq!(
             sender.events,
-            vec![SentEvent::Unicode('a', true), SentEvent::Unicode('a', false)]
+            vec![
+                SentEvent::Unicode('a', true),
+                SentEvent::Unicode('a', false)
+            ]
         );
     }
 

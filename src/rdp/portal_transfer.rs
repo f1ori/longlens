@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
- const PORTAL_FILETRANSFER_MIME: &str = "application/vnd.portal.filetransfer";
+const PORTAL_FILETRANSFER_MIME: &str = "application/vnd.portal.filetransfer";
 const REMOTE_FILE_CHUNK_SIZE: u32 = 32 * 1024;
 use adw::prelude::*;
 use gtk::subclass::prelude::*;
@@ -29,8 +29,8 @@ use std::io::Write;
 use std::sync::OnceLock;
 use tracing::{info, warn};
 
-use super::session::{RemoteClipboardFile, Session};
 use super::RdpWidget;
+use super::session::{RemoteClipboardFile, Session};
 
 glib::wrapper! {
     pub struct PortalFileTransferProvider(ObjectSubclass<portal_provider::PortalFileTransferProvider>)
@@ -38,14 +38,25 @@ glib::wrapper! {
 }
 
 impl PortalFileTransferProvider {
-    pub(super) fn new(widget: &RdpWidget, session: Session, files: Vec<RemoteClipboardFile>) -> Self {
-        info!(count = files.len(), ?files, "Creating portal file-transfer clipboard provider");
+    pub(super) fn new(
+        widget: &RdpWidget,
+        session: Session,
+        files: Vec<RemoteClipboardFile>,
+    ) -> Self {
+        info!(
+            count = files.len(),
+            ?files,
+            "Creating portal file-transfer clipboard provider"
+        );
         let provider: Self = glib::Object::new();
-        provider.imp().state.replace(Some(portal_provider::TransferState {
-            widget: widget.downgrade(),
-            session,
-            files,
-        }));
+        provider
+            .imp()
+            .state
+            .replace(Some(portal_provider::TransferState {
+                widget: widget.downgrade(),
+                session,
+                files,
+            }));
         provider
     }
 }
@@ -124,7 +135,11 @@ mod portal_provider {
                         "RDP widget is no longer available",
                     ));
                 };
-                info!(mime_type, count = state.files.len(), "Starting on-demand remote clipboard download");
+                info!(
+                    mime_type,
+                    count = state.files.len(),
+                    "Starting on-demand remote clipboard download"
+                );
                 let files = download_remote_files_for_portal(&widget, &state.session, &state.files)
                     .await
                     .ok_or_else(|| {
@@ -133,10 +148,13 @@ mod portal_provider {
                             "Could not download remote clipboard files",
                         )
                     })?;
-                let data = start_portal_file_transfer(files).await.map_err(|error| {
-                    glib::Error::new(gio::IOErrorEnum::Failed, &error)
-                })?;
-                info!(bytes = data.len(), mime_type, "Writing clipboard file-transfer response data");
+                let data = start_portal_file_transfer(files)
+                    .await
+                    .map_err(|error| glib::Error::new(gio::IOErrorEnum::Failed, &error))?;
+                info!(
+                    bytes = data.len(),
+                    mime_type, "Writing clipboard file-transfer response data"
+                );
                 stream
                     .write_all_future(data, glib::Priority::DEFAULT)
                     .await
@@ -152,7 +170,10 @@ async fn download_remote_files_for_portal(
     session: &Session,
     files: &[RemoteClipboardFile],
 ) -> Option<Vec<std::fs::File>> {
-    info!(count = files.len(), "Preparing on-demand remote clipboard download");
+    info!(
+        count = files.len(),
+        "Preparing on-demand remote clipboard download"
+    );
     let dir = glib::user_cache_dir()
         .join("longlens")
         .join("clipboard")
@@ -168,7 +189,10 @@ async fn download_remote_files_for_portal(
     for (index, file) in files.iter().enumerate() {
         info!(index, name = %file.name, size = file.size, is_directory = file.is_directory, "Downloading remote clipboard file");
         if file.is_directory {
-            warn!("Skipping remote clipboard directory {}; portal file transfer only supports regular files", file.name);
+            warn!(
+                "Skipping remote clipboard directory {}; portal file transfer only supports regular files",
+                file.name
+            );
             continue;
         }
 
@@ -180,7 +204,10 @@ async fn download_remote_files_for_portal(
         let mut out = match std::fs::File::create(&path) {
             Ok(out) => out,
             Err(error) => {
-                warn!("Could not create clipboard file {}: {error}", path.display());
+                warn!(
+                    "Could not create clipboard file {}: {error}",
+                    path.display()
+                );
                 continue;
             }
         };
@@ -192,10 +219,21 @@ async fn download_remote_files_for_portal(
         match size_receiver.recv().await {
             Ok(data) if data.len() == 8 => {
                 let remote_size = u64::from_le_bytes(data.as_slice().try_into().ok()?);
-                info!(index, descriptor_size = file.size, remote_size, "Received remote clipboard file size");
+                info!(
+                    index,
+                    descriptor_size = file.size,
+                    remote_size,
+                    "Received remote clipboard file size"
+                );
             }
-            Ok(data) => warn!(index, len = data.len(), "Unexpected remote clipboard file size response"),
-            Err(error) => warn!(index, error = %error, "Could not receive remote clipboard file size"),
+            Ok(data) => warn!(
+                index,
+                len = data.len(),
+                "Unexpected remote clipboard file size response"
+            ),
+            Err(error) => {
+                warn!(index, error = %error, "Could not receive remote clipboard file size")
+            }
         }
 
         let mut offset = 0u64;
@@ -221,7 +259,12 @@ async fn download_remote_files_for_portal(
                 break;
             }
             offset += data.len() as u64;
-            info!(index, offset, total = file.size, "Wrote remote clipboard file chunk");
+            info!(
+                index,
+                offset,
+                total = file.size,
+                "Wrote remote clipboard file chunk"
+            );
         }
 
         if offset == file.size {
@@ -229,14 +272,25 @@ async fn download_remote_files_for_portal(
             drop(out);
             match std::fs::File::open(&path) {
                 Ok(file) => out_files.push(file),
-                Err(error) => warn!("Could not reopen clipboard file {}: {error}", path.display()),
+                Err(error) => warn!(
+                    "Could not reopen clipboard file {}: {error}",
+                    path.display()
+                ),
             }
         } else {
-            warn!(index, received = offset, expected = file.size, "Remote clipboard file download incomplete");
+            warn!(
+                index,
+                received = offset,
+                expected = file.size,
+                "Remote clipboard file download incomplete"
+            );
         }
     }
 
-    info!(count = out_files.len(), "Finished on-demand remote clipboard download");
+    info!(
+        count = out_files.len(),
+        "Finished on-demand remote clipboard download"
+    );
     if !out_files.is_empty() {
         session.unlock_remote_clipboard_files();
         Some(out_files)
@@ -314,8 +368,8 @@ fn portal_transfer_worker(receiver: async_channel::Receiver<PortalTransferReques
 
         while let Ok(request) = receiver.recv().await {
             let connection = connection.clone();
-            let result = start_portal_file_transfer_on_connection(connection.clone(), request.files)
-                .await;
+            let result =
+                start_portal_file_transfer_on_connection(connection.clone(), request.files).await;
             match result {
                 Ok((key, data)) => {
                     let _ = request.response.send(Ok(data)).await;
@@ -333,7 +387,10 @@ async fn start_portal_file_transfer_on_connection(
     connection: ashpd::zbus::Connection,
     files: Vec<std::fs::File>,
 ) -> Result<(String, Vec<u8>), String> {
-    info!(count = files.len(), "Opening xdg-desktop-portal FileTransfer proxy");
+    info!(
+        count = files.len(),
+        "Opening xdg-desktop-portal FileTransfer proxy"
+    );
     let portal = ashpd::documents::file_transfer::FileTransfer::with_connection(connection)
         .await
         .map_err(|error| error.to_string())?;

@@ -80,14 +80,12 @@ pub fn register_search_provider(connection: &gio::DBusConnection, app: &LongLens
 
                 match method {
                     "GetInitialResultSet" => {
-                        let terms: Vec<String> =
-                            params.child_value(0).get().unwrap_or_default();
+                        let terms: Vec<String> = params.child_value(0).get().unwrap_or_default();
                         let results = app.destinations().search(&terms);
                         invocation.return_value(Some(&(results,).to_variant()));
                     }
                     "GetSubsearchResultSet" => {
-                        let terms: Vec<String> =
-                            params.child_value(1).get().unwrap_or_default();
+                        let terms: Vec<String> = params.child_value(1).get().unwrap_or_default();
                         let results = app.destinations().search(&terms);
                         invocation.return_value(Some(&(results,).to_variant()));
                     }
@@ -98,8 +96,7 @@ pub fn register_search_provider(connection: &gio::DBusConnection, app: &LongLens
                         invocation.return_value(Some(&(metas,).to_variant()));
                     }
                     "ActivateResult" => {
-                        let identifier: String =
-                            params.child_value(0).get().unwrap_or_default();
+                        let identifier: String = params.child_value(0).get().unwrap_or_default();
                         app.imp().pending_connection.replace(Some(identifier));
                         app.activate();
                         invocation.return_value(Some(&().to_variant()));

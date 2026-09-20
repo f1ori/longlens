@@ -19,23 +19,23 @@
  */
 
 mod about_dialog;
+mod application;
+mod config;
+mod connection_controller;
 mod destination_dialog;
 mod destination_row;
 mod destination_service;
-mod password_dialog;
-mod application;
-mod search_provider;
-mod secrets;
-mod config;
-mod connection_controller;
-mod model;
-mod rdp_file;
-mod theme_selector;
 mod destinations_page;
 mod fullscreen_bar;
+mod model;
+mod password_dialog;
 mod rdp;
-mod window;
+mod rdp_file;
+mod search_provider;
+mod secrets;
+mod theme_selector;
 mod utils;
+mod window;
 
 use self::application::LongLensApplication;
 use self::window::LongLensWindow;
@@ -48,7 +48,9 @@ use tracing_subscriber::EnvFilter;
 
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn")),
+        )
         .with_target(false)
         .init();
 
@@ -66,8 +68,7 @@ fn main() -> glib::ExitCode {
     // Create a new GtkApplication. The application manages our main loop,
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
-    let app =
-        LongLensApplication::new(APP_ID, &gio::ApplicationFlags::HANDLES_OPEN);
+    let app = LongLensApplication::new(APP_ID, &gio::ApplicationFlags::HANDLES_OPEN);
 
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This

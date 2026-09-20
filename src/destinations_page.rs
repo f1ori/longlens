@@ -35,10 +35,8 @@ use crate::destination_service::DestinationService;
 use crate::model::destination_object::DestinationObject;
 use crate::model::destinations::Destinations;
 
-
 mod imp {
     use super::*;
-
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/de/f1ori/longlens/ui/destinations_page.ui")]
@@ -155,8 +153,14 @@ impl LlDestinationPage {
                 let service = DestinationService::new(page.destinations_store());
                 let dialog = LongLensDestinationDialog::new();
                 dialog.imp().nameentry.set_text(&destination_object.name());
-                dialog.imp().hostnameentry.set_text(&destination_object.hostname());
-                dialog.imp().usernameentry.set_text(&destination_object.username());
+                dialog
+                    .imp()
+                    .hostnameentry
+                    .set_text(&destination_object.hostname());
+                dialog
+                    .imp()
+                    .usernameentry
+                    .set_text(&destination_object.username());
                 dialog.set_connection_options(destination_object.connection_options());
                 dialog.set_edit_mode(true);
                 dialog.set_on_save(glib::clone!(
@@ -169,10 +173,12 @@ impl LlDestinationPage {
                     #[upgrade_or_default]
                     move |form_data, connect_after_save| {
                         let uuid = destination_object.uuid();
-                        let Ok(uuid) = service.update_from_form(&uuid, form_data).map_err(|error| {
-                            warn!(?error, "Could not update destination");
-                            error
-                        }) else {
+                        let Ok(uuid) =
+                            service.update_from_form(&uuid, form_data).map_err(|error| {
+                                warn!(?error, "Could not update destination");
+                                error
+                            })
+                        else {
                             return;
                         };
                         if connect_after_save {
@@ -201,7 +207,9 @@ impl LlDestinationPage {
                     #[weak]
                     destination_object,
                     async move {
-                        if let Some(pw) = DestinationService::stored_password(&destination_object.uuid()).await {
+                        if let Some(pw) =
+                            DestinationService::stored_password(&destination_object.uuid()).await
+                        {
                             dialog.imp().passwordentry.set_text(pw.expose_secret());
                         } else {
                             dialog.imp().rememberpasswordswitch.set_active(false);

@@ -123,7 +123,10 @@ pub enum SessionEvent {
     ClipboardRemoteTextAvailable,
     ClipboardRemoteFilesAvailable,
     ClipboardRemoteFiles(Vec<RemoteClipboardFile>),
-    ClipboardRemoteFileContents { stream_id: u32, data: Vec<u8> },
+    ClipboardRemoteFileContents {
+        stream_id: u32,
+        data: Vec<u8>,
+    },
     CertificateRequest {
         details: CertificateDetails,
         response: mpsc::SyncSender<CertificateDecision>,
@@ -139,9 +142,14 @@ pub enum SessionEvent {
     },
     /// Waiting before the next attempt. `attempt` is the number of attempts
     /// made so far.
-    ReconnectCountdown { attempt: u32, seconds_left: u32 },
+    ReconnectCountdown {
+        attempt: u32,
+        seconds_left: u32,
+    },
     /// `attempt` is in progress right now.
-    ReconnectAttempt { attempt: u32 },
+    ReconnectAttempt {
+        attempt: u32,
+    },
     /// The session is live again.
     Reconnected,
     Terminated(TerminationReason),
@@ -382,15 +390,16 @@ impl Session {
 
     pub fn unlock_remote_clipboard_files(&self) {
         info!("Unlocking remote clipboard file data");
-        let _ = self.commands.send(SessionCommand::ClipboardUnlockRemoteFiles);
+        let _ = self
+            .commands
+            .send(SessionCommand::ClipboardUnlockRemoteFiles);
     }
 
     pub fn request_clipboard_file_size(&self, stream_id: u32, index: u32) {
         info!(stream_id, index, "Requesting remote clipboard file size");
-        let _ = self.commands.send(SessionCommand::ClipboardRequestFileSize {
-            stream_id,
-            index,
-        });
+        let _ = self
+            .commands
+            .send(SessionCommand::ClipboardRequestFileSize { stream_id, index });
     }
 
     pub fn request_clipboard_file_contents(
@@ -400,17 +409,25 @@ impl Session {
         offset: u64,
         size: u32,
     ) {
-        info!(stream_id, index, offset, size, "Requesting remote clipboard file content range");
-        let _ = self.commands.send(SessionCommand::ClipboardRequestFileContents {
+        info!(
             stream_id,
-            index,
-            offset,
-            size,
-        });
+            index, offset, size, "Requesting remote clipboard file content range"
+        );
+        let _ = self
+            .commands
+            .send(SessionCommand::ClipboardRequestFileContents {
+                stream_id,
+                index,
+                offset,
+                size,
+            });
     }
 
     pub fn next_stream_id(&self) -> u32 {
-        self.native._callbacks.next_stream_id.fetch_add(1, Ordering::Relaxed)
+        self.native
+            ._callbacks
+            .next_stream_id
+            .fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn disconnect(&self) {
@@ -494,12 +511,7 @@ fn run_session(native: &Arc<NativeSession>, commands: &mpsc::Receiver<SessionCom
                     height,
                     desktop_scale,
                 } => unsafe {
-                    ffi::ll_session_resize(
-                        native.raw.as_ptr(),
-                        width,
-                        height,
-                        desktop_scale,
-                    );
+                    ffi::ll_session_resize(native.raw.as_ptr(), width, height, desktop_scale);
                 },
                 SessionCommand::ClipboardSetText(text) => {
                     if let Ok(mut files) = native._callbacks.local_files.lock() {
@@ -801,9 +813,14 @@ unsafe extern "C" fn clipboard_text_callback(user_data: *mut c_void, data: *cons
     }
     let bytes = unsafe { std::slice::from_raw_parts(data, size as usize) };
     if let Some(text) = decode_clipboard_text(bytes) {
-        info!(chars = text.chars().count(), "Received remote clipboard text");
+        info!(
+            chars = text.chars().count(),
+            "Received remote clipboard text"
+        );
         let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
-        let _ = context.output.send_blocking(SessionEvent::ClipboardText(text));
+        let _ = context
+            .output
+            .send_blocking(SessionEvent::ClipboardText(text));
     } else {
         warn!(size, "Could not decode remote clipboard text");
     }
@@ -827,7 +844,11 @@ unsafe extern "C" fn clipboard_files_callback(user_data: *mut c_void, data: *con
     info!(size, "Received remote clipboard file descriptor data");
     let bytes = unsafe { std::slice::from_raw_parts(data, size as usize) };
     if let Some(files) = decode_file_group_descriptor(bytes) {
-        info!(count = files.len(), ?files, "Decoded remote clipboard file descriptors");
+        info!(
+            count = files.len(),
+            ?files,
+            "Decoded remote clipboard file descriptors"
+        );
         let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
         let _ = context
             .output
@@ -852,7 +873,10 @@ unsafe extern "C" fn clipboard_file_contents_response_callback(
     if user_data.is_null() || data.is_null() {
         return;
     }
-    info!(stream_id, size, "Received remote clipboard file content response");
+    info!(
+        stream_id,
+        size, "Received remote clipboard file content response"
+    );
     let data = unsafe { std::slice::from_raw_parts(data, size as usize) }.to_vec();
     let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
     let _ = context

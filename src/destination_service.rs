@@ -52,7 +52,10 @@ impl DestinationService {
         Self { destinations }
     }
 
-    pub fn add_from_form(&self, form_data: DestinationFormData) -> Result<String, DestinationError> {
+    pub fn add_from_form(
+        &self,
+        form_data: DestinationFormData,
+    ) -> Result<String, DestinationError> {
         let DestinationFormData {
             name,
             hostname,

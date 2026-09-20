@@ -84,7 +84,10 @@ impl Clipboard {
                 .remove(&stream_id)
                 .is_some()
             {
-                warn!(stream_id, "Timed out waiting for remote clipboard file response");
+                warn!(
+                    stream_id,
+                    "Timed out waiting for remote clipboard file response"
+                );
             }
         });
     }
@@ -93,7 +96,10 @@ impl Clipboard {
         if !self.enabled() {
             return;
         }
-        info!(chars = text.chars().count(), "Setting local clipboard from remote text");
+        info!(
+            chars = text.chars().count(),
+            "Setting local clipboard from remote text"
+        );
         *self.last_remote_text.borrow_mut() = Some(text.clone());
         widget.display().clipboard().set_text(&text);
     }
@@ -107,7 +113,10 @@ impl Clipboard {
         if !self.enabled() {
             return;
         }
-        warn!(count = files.len(), "Setting local clipboard to remote file-transfer provider");
+        warn!(
+            count = files.len(),
+            "Setting local clipboard to remote file-transfer provider"
+        );
         let provider = PortalFileTransferProvider::new(widget, session, files);
         self.suppress_next_announce.set(true);
         if let Err(error) = widget.display().clipboard().set_content(Some(&provider)) {
@@ -192,7 +201,11 @@ async fn read_clipboard_files(clipboard: &gdk::Clipboard) -> Option<Vec<LocalCli
             .name()
             .file_name()
             .and_then(|name| name.to_str().map(ToOwned::to_owned))
-            .or_else(|| path.file_name().and_then(|name| name.to_str()).map(ToOwned::to_owned))?;
+            .or_else(|| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .map(ToOwned::to_owned)
+            })?;
         files.push(LocalClipboardFile {
             path,
             name,

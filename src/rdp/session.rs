@@ -119,6 +119,8 @@ pub enum SessionEvent {
     },
     CursorHidden,
     CursorDefault,
+    /// Whether the server currently accepts resize requests.
+    DisplayControl(bool),
     ClipboardText(String),
     ClipboardRemoteTextAvailable,
     ClipboardRemoteFilesAvailable,
@@ -311,6 +313,7 @@ impl Session {
             frame: Some(frame_callback),
             cursor: Some(cursor_callback),
             cursor_system: Some(cursor_system_callback),
+            display_control: Some(display_control_callback),
             clipboard_offer_text: Some(clipboard_offer_text_callback),
             clipboard_text: Some(clipboard_text_callback),
             clipboard_offer_files: Some(clipboard_offer_files_callback),
@@ -794,6 +797,16 @@ unsafe extern "C" fn cursor_system_callback(user_data: *mut c_void, kind: u32) {
         SessionEvent::CursorDefault
     };
     let _ = context.output.send_blocking(event);
+}
+
+unsafe extern "C" fn display_control_callback(user_data: *mut c_void, available: i32) {
+    if user_data.is_null() {
+        return;
+    }
+    let context = unsafe { &*(user_data.cast::<CallbackContext>()) };
+    let _ = context
+        .output
+        .send_blocking(SessionEvent::DisplayControl(available != 0));
 }
 
 unsafe extern "C" fn clipboard_offer_text_callback(user_data: *mut c_void) {

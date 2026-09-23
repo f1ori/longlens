@@ -53,6 +53,8 @@ typedef struct {
     void (*cursor)(void* user_data, const uint8_t* data, uint32_t width, uint32_t height,
                    uint32_t hotspot_x, uint32_t hotspot_y);
     void (*cursor_system)(void* user_data, uint32_t kind);
+    /* Whether the server accepts resize requests (Display Control channel). */
+    void (*display_control)(void* user_data, int available);
     void (*clipboard_offer_text)(void* user_data);
     void (*clipboard_text)(void* user_data, const uint8_t* data, uint32_t size);
     void (*clipboard_offer_files)(void* user_data);

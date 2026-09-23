@@ -36,6 +36,7 @@ use super::key_handler::{KeyHandler, RemoteKeySender};
 use super::session::{
     CertificateDecision, CertificateDetails, Session, SessionEvent, TerminationReason,
 };
+use super::viewport::{Fit, Viewport};
 use super::{config, input, render};
 
 const GRACEFUL_DISCONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
@@ -81,6 +82,7 @@ mod imp {
         pointer_x: Cell<u16>,
         pointer_y: Cell<u16>,
         connection_scale: Cell<f64>,
+        viewport: Cell<Viewport>,
     }
 
     #[glib::object_subclass]
@@ -108,6 +110,13 @@ mod imp {
             let width = u16::try_from((logical_width * scale).round() as i64).ok()?;
             let height = u16::try_from((logical_height * scale).round() as i64).ok()?;
             Some((width, height, (scale * 100.0).round() as u32))
+        }
+
+        fn update_viewport(&self, update: impl FnOnce(&mut Viewport)) {
+            let mut viewport = self.viewport.get();
+            update(&mut viewport);
+            self.viewport.set(viewport);
+            self.obj().queue_draw();
         }
 
         pub(super) fn apply_connection_options(
@@ -151,6 +160,7 @@ mod imp {
             let generation = self.generation.get().wrapping_add(1);
             self.generation.set(generation);
             self.connection_scale.set(self.surface_scale());
+            self.update_viewport(Viewport::reset_remote);
             self.apply_connection_options(options, false);
             self.obj().set_state(RdpState::Connecting);
 
@@ -260,7 +270,7 @@ mod imp {
                     }
                     if let Some(texture) = render::image_texture(buffer, width, height, stride) {
                         *self.texture.borrow_mut() = Some(texture);
-                        self.obj().queue_draw();
+                        self.update_viewport(|viewport| viewport.set_remote_size(width, height));
                     }
                 }
                 SessionEvent::Cursor {
@@ -288,6 +298,16 @@ mod imp {
                 SessionEvent::CursorDefault => {
                     self.obj()
                         .set_cursor(gdk::Cursor::from_name("default", None).as_ref());
+                }
+                SessionEvent::DisplayControl(available) => {
+                    info!("Server resize support: {available}");
+                    self.update_viewport(|viewport| viewport.set_server_resizable(available));
+                    if available {
+                        // Catch up with any window resize made before the
+                        // channel came up.
+                        let obj = self.obj();
+                        self.queue_resize_to_logical_size(obj.width(), obj.height());
+                    }
                 }
                 SessionEvent::ClipboardRemoteTextAvailable => {
                     if !self.clipboard.enabled() {
@@ -586,9 +606,7 @@ mod imp {
             if self.state.get() != RdpState::Connected {
                 return;
             }
-            let scale = self.surface_scale();
-            let x = (x * scale).round().clamp(0.0, u16::MAX as f64) as u16;
-            let y = (y * scale).round().clamp(0.0, u16::MAX as f64) as u16;
+            let (x, y) = self.viewport.get().to_remote(x, y);
             self.pointer_x.set(x);
             self.pointer_y.set(y);
             if let Some(session) = self.session.borrow().as_ref() {
@@ -760,6 +778,10 @@ mod imp {
     impl WidgetImpl for RdpWidget {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
+            let scale = self.surface_scale();
+            self.update_viewport(|viewport| {
+                viewport.set_widget_size(width.into(), height.into(), scale)
+            });
             self.queue_resize_to_logical_size(width, height);
         }
 
@@ -771,10 +793,7 @@ mod imp {
             }
 
             let scale = self.surface_scale() as f32;
-            let Some((physical_w, physical_h, _)) = self.physical_size(width as f64, height as f64)
-            else {
-                return;
-            };
+            let viewport = self.viewport.get();
 
             let round = gsk::SnapDirection::Round;
 
@@ -782,23 +801,43 @@ mod imp {
             snapshot.set_snap(gsk::RectSnap::new(round, round, round, round));
 
             if let Some(texture) = self.texture.borrow().as_ref() {
-                if (physical_w as i32 - texture.width()).abs() <= 1 && (physical_h as i32 - texture.height()).abs() <= 1 {
-                    snapshot.scale(1.0 / scale, 1.0 / scale);
-                    snapshot.append_scaled_texture(
-                        texture,
-                        gsk::ScalingFilter::Nearest,
-                        &gtk::graphene::Rect::new(
-                            0.0,
-                            0.0,
-                            texture.width() as f32,
-                            texture.height() as f32,
-                        ),
-                    );
-                } else {
-                    snapshot.append_texture(
-                        texture,
-                        &gtk::graphene::Rect::new(0.0, 0.0, width, height),
-                    );
+                match viewport.fit() {
+                    Fit::Exact => {
+                        snapshot.scale(1.0 / scale, 1.0 / scale);
+                        snapshot.append_scaled_texture(
+                            texture,
+                            gsk::ScalingFilter::Nearest,
+                            &gtk::graphene::Rect::new(
+                                0.0,
+                                0.0,
+                                texture.width() as f32,
+                                texture.height() as f32,
+                            ),
+                        );
+                    }
+                    Fit::Stretch => {
+                        snapshot.append_texture(
+                            texture,
+                            &gtk::graphene::Rect::new(0.0, 0.0, width, height),
+                        );
+                    }
+                    Fit::Contain => {
+                        let rect = viewport.display_rect();
+                        snapshot.append_color(
+                            &gdk::RGBA::BLACK,
+                            &gtk::graphene::Rect::new(0.0, 0.0, width, height),
+                        );
+                        snapshot.append_scaled_texture(
+                            texture,
+                            gsk::ScalingFilter::Trilinear,
+                            &gtk::graphene::Rect::new(
+                                rect.x as f32,
+                                rect.y as f32,
+                                rect.width as f32,
+                                rect.height as f32,
+                            ),
+                        );
+                    }
                 }
             } else {
                 snapshot.append_color(

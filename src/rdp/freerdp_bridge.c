@@ -448,6 +448,26 @@ static UINT ll_cliprdr_server_format_data_response(
     return CHANNEL_RC_OK;
 }
 
+static void ll_notify_display_control(LLContext* context, int available)
+{
+    LLSession* session = context ? context->session : NULL;
+    if (session && session->callbacks.display_control)
+        session->callbacks.display_control(session->callbacks.user_data, available);
+}
+
+/* The server only sends its caps once it has opened the Display Control
+ * channel, so this is the point where resize requests start to work. */
+static UINT ll_disp_caps(DispClientContext* disp, UINT32 max_num_monitors,
+                         UINT32 max_monitor_area_factor_a, UINT32 max_monitor_area_factor_b)
+{
+    WINPR_UNUSED(max_num_monitors);
+    WINPR_UNUSED(max_monitor_area_factor_a);
+    WINPR_UNUSED(max_monitor_area_factor_b);
+    if (disp)
+        ll_notify_display_control(disp->custom, 1);
+    return CHANNEL_RC_OK;
+}
+
 static void ll_channel_connected(void* data, const ChannelConnectedEventArgs* event)
 {
     LLContext* context = data;
@@ -455,6 +475,10 @@ static void ll_channel_connected(void* data, const ChannelConnectedEventArgs* ev
         return;
     if (strcmp(event->name, DISP_DVC_CHANNEL_NAME) == 0) {
         context->disp = (DispClientContext*)event->pInterface;
+        if (context->disp) {
+            context->disp->custom = context;
+            context->disp->DisplayControlCaps = ll_disp_caps;
+        }
     } else if (strcmp(event->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
         context->cliprdr = (CliprdrClientContext*)event->pInterface;
         if (context->cliprdr) {
@@ -482,6 +506,7 @@ static void ll_channel_disconnected(void* data, const ChannelDisconnectedEventAr
         return;
     if (strcmp(event->name, DISP_DVC_CHANNEL_NAME) == 0) {
         context->disp = NULL;
+        ll_notify_display_control(context, 0);
     } else if (strcmp(event->name, CLIPRDR_SVC_CHANNEL_NAME) == 0) {
         context->cliprdr = NULL;
     } else if (strcmp(event->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {

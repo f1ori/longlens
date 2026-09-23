@@ -30,6 +30,7 @@ mod key_handler;
 mod portal_transfer;
 mod render;
 mod session;
+mod viewport;
 mod widget;
 
 pub use config::parse_hostname_port;

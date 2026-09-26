@@ -263,7 +263,8 @@ mod imp {
                     height,
                     stride,
                 } => {
-                    if self.state.get() == RdpState::Connecting {
+                    let first_frame = self.state.get() == RdpState::Connecting;
+                    if first_frame {
                         info!("State connected (first frame received)");
                         self.obj().set_state(RdpState::Connected);
                         self.announce_local_clipboard();
@@ -271,6 +272,12 @@ mod imp {
                     if let Some(texture) = render::image_texture(buffer, width, height, stride) {
                         *self.texture.borrow_mut() = Some(texture);
                         self.update_viewport(|viewport| viewport.set_remote_size(width, height));
+                    }
+                    if first_frame {
+                        // Resizes are held back until the session is up; catch
+                        // up with the window size now.
+                        let obj = self.obj();
+                        self.queue_resize_to_logical_size(obj.width(), obj.height());
                     }
                 }
                 SessionEvent::Cursor {
@@ -449,8 +456,14 @@ mod imp {
                     self,
                     move || {
                         *imp.resize_timeout.borrow_mut() = None;
-                        let state = imp.state.get();
-                        if state == RdpState::Disconnected || state == RdpState::Interrupted {
+                        // A monitor layout sent before the first frame can make
+                        // the server (e.g. GNOME Remote Desktop right after the
+                        // login handover) reactivate the half-set-up session and
+                        // drop it. The first frame queues the resize again.
+                        if imp.state.get() != RdpState::Connected {
+                            return;
+                        }
+                        if imp.viewport.get().fit() == Fit::Exact {
                             return;
                         }
                         let Some((width, height, scale)) =

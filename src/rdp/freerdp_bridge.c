@@ -68,6 +68,10 @@ struct LLSession {
     rdpContext* context;
     LLSessionCallbacks callbacks;
     uint32_t last_error;
+    /* Set once freerdp_connect() has run until freerdp_disconnect() tears the
+       connection down again, including after a failed attempt or a lost
+       connection. */
+    BOOL needs_disconnect;
     uint8_t* clipboard_text;
     uint32_t clipboard_text_size;
     uint8_t* clipboard_file_descriptor;
@@ -708,6 +712,9 @@ void ll_session_free(LLSession* session)
             unlock.clipDataId = session->remote_clip_data_id;
             context->cliprdr->ClientUnlockClipboardData(context->cliprdr, &unlock);
         }
+        /* Freeing the context does not close the channels. Their threads
+           (e.g. rdpsnd) would keep running on freed memory. */
+        ll_session_disconnect(session);
         freerdp_client_context_free(session->context);
     }
     free(session->clipboard_text);
@@ -719,6 +726,7 @@ int ll_session_connect(LLSession* session)
 {
     if (!session || !session->context)
         return 0;
+    session->needs_disconnect = TRUE;
     const BOOL ok = freerdp_connect(session->context->instance);
     session->last_error = freerdp_get_last_error(session->context);
     return ok ? 1 : 0;
@@ -776,8 +784,10 @@ int ll_session_can_restore_session(const LLSession* session)
 
 void ll_session_disconnect(LLSession* session)
 {
-    if (session && session->context)
-        freerdp_disconnect(session->context->instance);
+    if (!session || !session->context || !session->needs_disconnect)
+        return;
+    session->needs_disconnect = FALSE;
+    freerdp_disconnect(session->context->instance);
 }
 
 void ll_session_abort(LLSession* session)

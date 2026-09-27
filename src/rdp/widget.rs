@@ -151,7 +151,7 @@ mod imp {
             else {
                 return;
             };
-            info!("Connecting to {hostname}:{port} {width}x{height}");
+            info!("Connecting to {hostname}:{port} {width}x{height} at {desktop_scale} %");
 
             self.abandon_session();
             *self.texture.borrow_mut() = None;

@@ -625,6 +625,18 @@ static int ll_client_stop(rdpContext* context)
     return 0;
 }
 
+/* MS-RDPEDISP 2.2.2.2.1: the width must be even and both dimensions and the
+   desktop scale must stay in range. Apply this to the initial desktop size as
+   well: servers such as gnome-remote-desktop create a virtual monitor from it. */
+static void ll_sanitize_monitor(uint32_t* width, uint32_t* height, uint32_t* desktop_scale)
+{
+    *width = MAX(DISPLAY_CONTROL_MIN_MONITOR_WIDTH,
+                 MIN(DISPLAY_CONTROL_MAX_MONITOR_WIDTH, *width)) & ~1u;
+    *height = MAX(DISPLAY_CONTROL_MIN_MONITOR_HEIGHT,
+                  MIN(DISPLAY_CONTROL_MAX_MONITOR_HEIGHT, *height));
+    *desktop_scale = MAX(100, MIN(500, *desktop_scale));
+}
+
 static BOOL ll_set_string(rdpSettings* settings, FreeRDP_Settings_Keys_String key,
                           const char* value)
 {
@@ -658,6 +670,11 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
     session->callbacks = *callbacks;
     ll_context(context)->session = session;
 
+    uint32_t width = config->width;
+    uint32_t height = config->height;
+    uint32_t desktop_scale = config->desktop_scale;
+    ll_sanitize_monitor(&width, &height, &desktop_scale);
+
     rdpSettings* settings = context->settings;
     BOOL ok =
         ll_set_string(settings, FreeRDP_ServerHostname, config->hostname) &&
@@ -666,11 +683,10 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
         ll_set_string(settings, FreeRDP_Domain, config->domain) &&
         ll_set_string(settings, FreeRDP_Password, config->password) &&
         ll_set_string(settings, FreeRDP_ConfigPath, config->config_path) &&
-        freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, config->width) &&
-        freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, config->height) &&
+        freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width) &&
+        freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, height) &&
         freerdp_settings_set_uint32(settings, FreeRDP_ColorDepth, 32) &&
-        freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor,
-                                    config->desktop_scale) &&
+        freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor, desktop_scale) &&
         freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, 100) &&
         freerdp_settings_set_bool(settings, FreeRDP_AutoLogonEnabled, TRUE) &&
         /* Ask the server for an auto-reconnect cookie so that a reconnect after
@@ -873,13 +889,7 @@ int ll_session_resize(LLSession* session, uint32_t width, uint32_t height,
     if (!context->disp || !context->disp->SendMonitorLayout)
         return 0;
 
-    /* MS-RDPEDISP 2.2.2.2.1: the width must be even and both dimensions and
-       the desktop scale must stay in range. */
-    width = MAX(DISPLAY_CONTROL_MIN_MONITOR_WIDTH,
-                MIN(DISPLAY_CONTROL_MAX_MONITOR_WIDTH, width)) & ~1u;
-    height = MAX(DISPLAY_CONTROL_MIN_MONITOR_HEIGHT,
-                 MIN(DISPLAY_CONTROL_MAX_MONITOR_HEIGHT, height));
-    desktop_scale = MAX(100, MIN(500, desktop_scale));
+    ll_sanitize_monitor(&width, &height, &desktop_scale);
 
     DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
     layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;

@@ -873,6 +873,14 @@ int ll_session_resize(LLSession* session, uint32_t width, uint32_t height,
     if (!context->disp || !context->disp->SendMonitorLayout)
         return 0;
 
+    /* MS-RDPEDISP 2.2.2.2.1: the width must be even and both dimensions and
+       the desktop scale must stay in range. */
+    width = MAX(DISPLAY_CONTROL_MIN_MONITOR_WIDTH,
+                MIN(DISPLAY_CONTROL_MAX_MONITOR_WIDTH, width)) & ~1u;
+    height = MAX(DISPLAY_CONTROL_MIN_MONITOR_HEIGHT,
+                 MIN(DISPLAY_CONTROL_MAX_MONITOR_HEIGHT, height));
+    desktop_scale = MAX(100, MIN(500, desktop_scale));
+
     DISPLAY_CONTROL_MONITOR_LAYOUT layout = { 0 };
     layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
     layout.Width = width;

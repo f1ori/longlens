@@ -686,7 +686,11 @@ LLSession* ll_session_new(const LLSessionConfig* config, const LLSessionCallback
         freerdp_settings_set_bool(settings, FreeRDP_SupportDisplayControl, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_DynamicResolutionUpdate, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_GfxH264, TRUE) &&
-        freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, TRUE) &&
+        /* Windows sometimes spends several seconds setting up an AVC444
+           encoder after logon and then drops the session with
+           ERRINFO_RPC_INITIATED_DISCONNECT. Plain H.264 (AVC420) is reliable. */
+        freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, FALSE) &&
+        freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444v2, FALSE) &&
         freerdp_settings_set_bool(settings, FreeRDP_GfxThinClient, TRUE) &&
         freerdp_settings_set_bool(settings, FreeRDP_GfxSmallCache, TRUE) &&
         freerdp_settings_set_uint32(settings, FreeRDP_OsMajorType, OSMAJORTYPE_UNIX) &&
